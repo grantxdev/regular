@@ -34,9 +34,9 @@ export function Assets() {
     <div className="screen">
       <h1 className="page-title">Assets</h1>
       <p className="page-sub">
-        Outside worth. <span className="green">Verified</span> means Regular
-        routed the money itself; <span className="amber">estimated</span> means
-        you typed it and it ages.
+        Holdings. <span className="green">Verified</span> figures are routed by
+        Regular; <span className="amber">estimated</span> figures are entered by
+        you and age over time.
       </p>
 
       <div className="card">
@@ -46,15 +46,15 @@ export function Assets() {
         </div>
         <div className="stack mt16" style={{ gap: 10 }}>
           <div className="row">
-            <span className="dim">Cash layers (reserve, Regular, surplus)</span>
+            <span className="dim">Cash layers</span>
             <span className="num">{fmt(d.reserve + d.regularWallet + d.surplusHeld, sym)}</span>
           </div>
           <div className="row">
-            <span className="dim">Goal balances (tied)</span>
+            <span className="dim">Objectives</span>
             <span className="num">{fmt(d.tiedTotal, sym)}</span>
           </div>
           <div className="row">
-            <span className="dim">Provisions (committed)</span>
+            <span className="dim">Provisions</span>
             <span className="num">{fmt(d.provisionsTotal, sym)}</span>
           </div>
         </div>
@@ -68,10 +68,7 @@ export function Assets() {
       </div>
 
       {data.assets.length === 0 && (
-        <div className="card status-line">
-          Nothing logged. A car, old savings, crypto — anything you own that
-          should count.
-        </div>
+        <div className="card status-line">Nothing requires your attention.</div>
       )}
 
       {data.assets.map((a) => {
@@ -92,7 +89,7 @@ export function Assets() {
             <div className="row mt8">
               <span className="big-num dim">{fmt(current, sym)}</span>
               <span className="status-line">
-                updated {fmtDate(a.lastUpdated)}
+                valued {fmtDate(a.lastUpdated)}
                 {a.category === "vehicle" && current < a.value && (
                   <> · depreciated from {fmt(a.value, sym)}</>
                 )}
@@ -100,13 +97,12 @@ export function Assets() {
             </div>
             {stale && (
               <div className="notice mt16">
-                Still worth about {fmt(current, sym)}? A quick confirm keeps
-                your net worth honest.
+                Last valued {fmtDate(a.lastUpdated)}. Confirm the figure.
               </div>
             )}
             <div className="mt16" style={{ display: "flex", gap: 8 }}>
               <button className="btn" onClick={() => setUpdating(a)}>
-                {stale ? "Confirm / update" : "Update value"}
+                {stale ? "Confirm" : "Update value"}
               </button>
               <button
                 className="btn btn-quiet"

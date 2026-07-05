@@ -54,14 +54,14 @@ export function MoneyIn() {
     if (isNaN(v) || v <= 0) return;
     apply((draft) => actions.logSpend(draft, v));
     setSpend("");
-    setSpendFlash(`Logged ${fmtExact(v, sym)}.`);
+    setSpendFlash("Recorded.");
     setTimeout(() => setSpendFlash(null), 2500);
   };
 
   return (
     <div className="screen">
       <h1 className="page-title">Money in</h1>
-      <p className="page-sub">Log it and forget it. The rules do the rest.</p>
+      <p className="page-sub">Record it. The allocation follows.</p>
 
       <div className="grid2">
         <div className="card">
@@ -121,14 +121,14 @@ export function MoneyIn() {
             />
           </div>
           <button className="btn btn-primary btn-big" disabled={!valid} onClick={submit}>
-            Log income
+            Record
           </button>
         </div>
 
         <div>
           {receipt ? (
             <>
-              <div className="label mb8">Split receipt · {receipt.source}</div>
+              <div className="label mb8">Received · {receipt.source}</div>
               <SplitReceipt amount={receipt.amount} split={receipt.split} symbol={sym} />
               <button className="btn btn-quiet mt8" onClick={() => setReceipt(null)}>
                 Dismiss
@@ -136,23 +136,21 @@ export function MoneyIn() {
             </>
           ) : preview ? (
             <>
-              <div className="label mb8">Where it will go</div>
+              <div className="label mb8">Provisional allocation</div>
               <SplitReceipt amount={parsed} split={preview} symbol={sym} />
             </>
           ) : (
             <div className="card" style={{ color: "var(--text-dim)", fontSize: 13.5 }}>
-              Type an amount and the split preview appears here — giving first,
-              then reserve, goals, your Regular, and surplus. Log it and the
-              receipt becomes part of your ledger.
+              Enter an amount. The allocation appears here.
             </div>
           )}
         </div>
       </div>
 
-      {/* optional spend game */}
+      {/* optional discretionary log */}
       <div className="card mt24">
         <div className="row">
-          <span className="label">Spend game (optional)</span>
+          <span className="label">Discretionary spending (optional)</span>
           {spendFlash && <span className="status-line green">{spendFlash}</span>}
         </div>
         <div className="form-row mt8" style={{ maxWidth: 380 }}>
@@ -162,18 +160,17 @@ export function MoneyIn() {
             inputMode="decimal"
             min="0"
             step="0.01"
-            placeholder="I spent $…"
+            placeholder="Amount spent"
             value={spend}
             onChange={(e) => setSpend(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submitSpend()}
           />
           <button className="btn" style={{ flex: "0 0 auto" }} onClick={submitSpend}>
-            Log spend
+            Record
           </button>
         </div>
         <div className="status-line mt8">
-          Two seconds, no categories. If you stop logging, nothing breaks — the
-          counter resets fresh each week.
+          Optional. The weekly figure resets each week.
         </div>
       </div>
     </div>

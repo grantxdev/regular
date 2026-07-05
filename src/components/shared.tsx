@@ -89,9 +89,12 @@ export function SplitReceipt({
 
   return (
     <div className="receipt">
-      <div className="row mb8">
-        <span className="label">You earned</span>
+      <div className="row">
+        <span className="label">Received</span>
         <span className="big-num">{fmtExact(amount, symbol)}</span>
+      </div>
+      <div className="label mt8 mb8" style={{ color: "var(--text-faint)" }}>
+        Allocated
       </div>
       <div className="receipt-row">
         <span className="dim">Giving</span>
@@ -100,9 +103,7 @@ export function SplitReceipt({
       <div className="receipt-row">
         <span className="dim">
           Reserve
-          {split.recovery && (
-            <span className="faint"> · recovery refill included</span>
-          )}
+          {split.recovery && <span className="faint"> · rebuilding</span>}
         </span>
         <span className="num">{fmtExact(split.reserve, symbol)}</span>
       </div>
@@ -113,7 +114,7 @@ export function SplitReceipt({
         </div>
       ))}
       <div className="receipt-row">
-        <span className="dim">Regular</span>
+        <span className="dim">Allowance</span>
         <span className="num">{fmtExact(split.regular, symbol)}</span>
       </div>
       {split.surplus > 0 && (
@@ -138,7 +139,7 @@ export function NetWorthChart({
   symbol: string;
 }) {
   if (points.length < 2) {
-    return <div className="status-line">Chart appears after your first weeks of history.</div>;
+    return <div className="status-line">Awaiting history.</div>;
   }
   const W = 720;
   const H = 150;

@@ -51,26 +51,21 @@ export function Console({ go }: { go: (s: Screen) => void }) {
     Math.ceil((weekEnd.getTime() - Date.now()) / 86_400_000)
   );
 
-  const spentFrac =
-    data.settings.regularWeekly > 0
-      ? 1 - d.regularRemaining / data.settings.regularWeekly
-      : 0;
-  const timeFrac = 1 - daysLeft / 7;
-  const pace =
-    d.regularRemaining <= 0
-      ? "done for the week"
-      : spentFrac <= timeFrac + 0.1
-        ? "cruising"
-        : spentFrac <= timeFrac + 0.3
-          ? "steady"
-          : "tight";
-
   const dueSoon = data.goals.filter(
     (g) =>
       g.status === "active" &&
       g.kind === "provision" &&
       new Date(g.targetDate).getTime() - Date.now() < 7 * 86_400_000
   );
+
+  const reserveSound = d.runwayMonths >= 3;
+  const reserveWord = d.inRecovery ? "Rebuilding." : reserveSound ? "Sound." : "Building.";
+  // The single calm line of reassurance — shown only when nothing is amiss.
+  const allWell =
+    !d.inRecovery &&
+    reserveSound &&
+    overdueReceivables.length === 0 &&
+    !feasibility.some((f) => f.state === "wishful");
 
   return (
     <div className="screen">
@@ -91,14 +86,18 @@ export function Console({ go }: { go: (s: Screen) => void }) {
         </div>
       </div>
 
-      <div className="mt16 mb24">
+      <div className="mt16 mb16">
         <NetWorthChart points={d.history} symbol={sym} />
       </div>
 
+      {allWell && (
+        <div className="status-line mb24">Everything is where it should be.</div>
+      )}
+
       {d.inRecovery && (
         <div className="notice warn mb16">
-          Recovery mode. The reserve is refilling from future income; goals keep
-          a heartbeat; your Regular is untouched.
+          Reserves engaged. Rebuilding has begun. Allocations to objectives are
+          reduced; your allowance is unaffected.
         </div>
       )}
 
@@ -110,7 +109,7 @@ export function Console({ go }: { go: (s: Screen) => void }) {
           <div className="notice mb16" key={r.id}>
             <div className="row">
               <span>
-                {r.person}'s {fmt(d.receivableOutstanding[r.id] ?? r.amount, sym)} was expected {when}.
+                {r.person}'s {fmt(d.receivableOutstanding[r.id] ?? r.amount, sym)} was due {when}.
               </span>
               <button className="linklike" onClick={() => dismiss(r.id)}>
                 dismiss
@@ -120,26 +119,19 @@ export function Console({ go }: { go: (s: Screen) => void }) {
         );
       })}
 
-      {/* the three feelings */}
+      {/* the three liquidity positions — numbers, little else */}
       <div className="grid3">
         <div className="card">
           <div className="label mb8">Available today</div>
           <div className="big-num green">{fmt(d.availableToday, sym)}</div>
-          <div className="status-line mt8">
-            Regular remaining{d.surplusHeld > 0 ? " + unassigned surplus" : ""}. Spend freely.
-          </div>
         </div>
         <div className="card">
           <div className="label mb8">Accessible if needed</div>
           <div className="big-num">{fmt(d.accessibleIfNeeded, sym)}</div>
-          <div className="status-line mt8">The "life happens" door. One tap away.</div>
         </div>
         <div className="card">
           <div className="label mb8">Protected</div>
           <div className="big-num">{fmt(d.protectedTotal, sym)}</div>
-          <div className="status-line mt8">
-            Deep reserve, provisions, and everything working long-term.
-          </div>
         </div>
       </div>
 
@@ -147,8 +139,8 @@ export function Console({ go }: { go: (s: Screen) => void }) {
       <div className="grid2 mt16">
         <div className="card">
           <div className="row">
-            <span className="label">This week's Regular</span>
-            <span className="status-line">{plural(daysLeft, "day")} left</span>
+            <span className="label">This week's allowance</span>
+            <span className="status-line faint">{plural(daysLeft, "day")} remaining</span>
           </div>
           <div className="big-num mt8">
             {fmt(d.regularRemaining, sym)}
@@ -163,16 +155,13 @@ export function Console({ go }: { go: (s: Screen) => void }) {
               }}
             />
           </div>
-          <div className="status-line mt8">
-            {fmt(d.regularRemaining, sym)} left, {plural(daysLeft, "day")} — {pace}.
-          </div>
         </div>
 
         <div className="card">
           <div className="label mb8">Reserve</div>
           <div className="big-num">
             {d.runwayMonths.toFixed(1)}
-            <span className="dim" style={{ fontSize: "0.85rem", fontWeight: 400 }}> months runway</span>
+            <span className="dim" style={{ fontSize: "0.85rem", fontWeight: 400 }}> months</span>
           </div>
           <div className="meter mt8">
             <div
@@ -182,12 +171,8 @@ export function Console({ go }: { go: (s: Screen) => void }) {
             />
           </div>
           <div className="status-line mt8">
-            {fmt(d.reserve, sym)} of {fmt(d.reserveTarget, sym)} target.{" "}
-            {d.reserve >= d.reserveTarget
-              ? "Full. Nominal."
-              : d.inRecovery
-                ? "Refilling."
-                : "Filling. Nominal."}
+            {reserveWord}
+            <span className="faint"> {fmt(d.reserve, sym)} of {fmt(d.reserveTarget, sym)}.</span>
           </div>
         </div>
       </div>
@@ -199,29 +184,29 @@ export function Console({ go }: { go: (s: Screen) => void }) {
           symbol={sym}
           slices={[
             { label: "Reserve", value: d.reserve, color: "var(--accent)" },
-            { label: "Goals (tied)", value: d.tiedTotal, color: "#5b8fd9" },
+            { label: "Objectives", value: d.tiedTotal, color: "#5b8fd9" },
             { label: "Provisions", value: d.provisionsTotal, color: "#9aa1ab" },
             {
-              label: "Regular + surplus",
+              label: "Allowance + surplus",
               value: d.regularWallet + d.surplusHeld,
               color: "#5c636d",
             },
-            { label: "Outside assets", value: d.assetsTotal, color: "#8465c9" },
-            { label: "Receivables (weighted)", value: d.receivablesWeighted, color: "#c98a5b" },
+            { label: "Holdings", value: d.assetsTotal, color: "#8465c9" },
+            { label: "Amounts owed", value: d.receivablesWeighted, color: "#c98a5b" },
           ]}
         />
       </div>
 
-      {/* goal strip */}
+      {/* objectives strip */}
       <div className="card mt16">
         <div className="row mb16">
-          <span className="label">Goals</span>
+          <span className="label">Objectives</span>
           <button className="linklike" onClick={() => go("goals")}>
             details
           </button>
         </div>
         {feasibility.length === 0 && (
-          <div className="status-line">No accumulating goals yet. Add one under Goals.</div>
+          <div className="status-line">Nothing requires your attention.</div>
         )}
         <div className="stack" style={{ gap: 14 }}>
           {feasibility.map((f) => (
@@ -229,15 +214,14 @@ export function Console({ go }: { go: (s: Screen) => void }) {
               <div className="row">
                 <span style={{ fontSize: 14 }}>{f.goal.name}</span>
                 <span className="status-line">
-                  {f.state === "funded" && <span className="green">funded</span>}
+                  {f.state === "funded" && <span className="green">Funded.</span>}
                   {f.state === "on_track" && (
                     <span className="green">
-                      on track
-                      {f.projectedDate ? `, ${fmtMonth(f.projectedDate)}` : ""}
+                      On schedule{f.projectedDate ? `. ${fmtMonth(f.projectedDate)}` : ""}
                     </span>
                   )}
-                  {f.state === "stretch" && <span className="amber">stretch</span>}
-                  {f.state === "wishful" && <span className="amber">wishful — see Goals</span>}
+                  {f.state === "stretch" && <span className="amber">With discipline</span>}
+                  {f.state === "wishful" && <span className="amber">Underfunded</span>}
                 </span>
               </div>
               <div className={`meter mt8 ${f.state === "wishful" || f.state === "stretch" ? "warn" : ""}`}>
@@ -245,7 +229,7 @@ export function Console({ go }: { go: (s: Screen) => void }) {
               </div>
               <div className="status-line mt8 faint">
                 {fmt(f.balance, sym)} of {fmt(f.goal.target, sym)} ·{" "}
-                {Math.round(f.progressPct)}% · target {fmtDate(f.goal.targetDate)}
+                {Math.round(f.progressPct)}% · {fmtDate(f.goal.targetDate)}
               </div>
             </div>
           ))}
@@ -254,8 +238,8 @@ export function Console({ go }: { go: (s: Screen) => void }) {
           <>
             <hr className="hairline" />
             <div className="status-line">
-              Due soon:{" "}
-              {dueSoon.map((g) => `${g.name} (${fmtDate(g.targetDate)})`).join(", ")} — see Goals.
+              Due shortly:{" "}
+              {dueSoon.map((g) => `${g.name} (${fmtDate(g.targetDate)})`).join(", ")}.
             </div>
           </>
         )}

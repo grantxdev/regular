@@ -30,7 +30,7 @@ export function Login({ onOffline }: { onOffline: () => void }) {
         const { data, error } = await supabase().auth.signUp({ email, password });
         if (error) throw error;
         if (!data.session) {
-          setNotice("Account created. Check your email for the confirmation link, then sign in.");
+          setNotice("Account created. Confirm via the email link, then sign in.");
           setMode("in");
         }
       }
@@ -56,7 +56,7 @@ export function Login({ onOffline }: { onOffline: () => void }) {
           REGULAR
         </div>
         <div className="faint" style={{ fontSize: 12, marginTop: 4, marginBottom: 28 }}>
-          never not saving
+          Your affairs, in order.
         </div>
 
         <div className="card">
@@ -92,7 +92,7 @@ export function Login({ onOffline }: { onOffline: () => void }) {
 
           <div className="row mt16">
             <button className="linklike" onClick={() => { setMode(mode === "in" ? "up" : "in"); setError(null); }}>
-              {mode === "in" ? "First time? Create account" : "Have an account? Sign in"}
+              {mode === "in" ? "Create account" : "Sign in"}
             </button>
             <button className="linklike" onClick={onOffline}>
               Continue offline
@@ -101,8 +101,7 @@ export function Login({ onOffline }: { onOffline: () => void }) {
         </div>
 
         <div className="status-line faint mt16">
-          Your ledger syncs to your private database. Offline mode keeps
-          everything in this browser only.
+          Records are held privately. Offline keeps them on this device.
         </div>
       </div>
     </div>

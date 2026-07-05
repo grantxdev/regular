@@ -69,8 +69,8 @@ export function Ledger() {
           out.push({
             key: e.id, date, kind: "recovery",
             detail: e.direction === "enter"
-              ? "Recovery mode began — reserve refill prioritized, Regular untouched"
-              : "Your storehouse is full again. Goal contributions restored.",
+              ? "Reserves engaged. Rebuilding has begun."
+              : "Reserves restored. Normal allocations resumed.",
             amount: null,
           });
           break;
@@ -136,8 +136,7 @@ export function Ledger() {
     <div className="screen">
       <h1 className="page-title">Ledger</h1>
       <p className="page-sub">
-        Every event, on the record. {rows.length} entries ·{" "}
-        {fmtExact(d.givenTotal, sym)} given to date.
+        The full record. {rows.length} entries · {fmtExact(d.givenTotal, sym)} given to date.
       </p>
 
       <div className="row mb16" style={{ alignItems: "center" }}>

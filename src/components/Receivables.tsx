@@ -38,7 +38,7 @@ export function Receivables() {
       <div className="row mt24 mb16">
         <div>
           <h2>Receivables</h2>
-          <div className="status-line faint">Money owed to you — a claim, never counted as cash.</div>
+          <div className="status-line faint">Amounts owed to you. Counted as claims, not cash.</div>
         </div>
         <span style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={() => setAdding(true)}>
@@ -51,10 +51,7 @@ export function Receivables() {
       </div>
 
       {active.length === 0 && (
-        <div className="card status-line">
-          No receivables. Record what you're owed, or lend money and watch it
-          leave your liquid layers without denting your net worth.
-        </div>
+        <div className="card status-line">Nothing requires your attention.</div>
       )}
 
       {d.receivablesFullValue > 0 && (
@@ -64,11 +61,11 @@ export function Receivables() {
             <span className="num dim">{fmt(d.receivablesFullValue, sym)}</span>
           </div>
           <div className="row mt8">
-            <span className="status-line">Counted in net worth (confidence-weighted)</span>
+            <span className="status-line">Counted in net worth, confidence-weighted</span>
             <span className="num green">{fmt(d.receivablesWeighted, sym)}</span>
           </div>
           <div className="status-line faint mt8">
-            Never part of "Available today," "Accessible if needed," or your runway.
+            Excluded from available, accessible, and runway figures.
           </div>
         </div>
       )}
@@ -96,12 +93,12 @@ export function Receivables() {
               <span className="status-line">
                 {r.expectedDate ? (
                   overdue ? (
-                    <span className="amber">expected {fmtDate(r.expectedDate)}</span>
+                    <span className="amber">due {fmtDate(r.expectedDate)}</span>
                   ) : (
-                    <>expected {fmtDate(r.expectedDate)}</>
+                    <>due {fmtDate(r.expectedDate)}</>
                   )
                 ) : (
-                  <span className="faint">no date set</span>
+                  <span className="faint">no date</span>
                 )}
               </span>
             </div>
@@ -186,8 +183,8 @@ function ClaimDialog({
       <h2 className="mb16">{existing ? "Edit receivable" : "Record a claim"}</h2>
       {!existing && (
         <div className="notice mb16">
-          Recording a debt someone already owes you. No cash moves — it simply
-          appears in your net worth at its confidence weight.
+          An existing debt. No funds move; it enters net worth at its confidence
+          weight.
         </div>
       )}
       <ClaimFields
@@ -267,12 +264,11 @@ function LendDialog({ onClose }: { onClose: () => void }) {
   if (pendingDone) {
     return (
       <Modal onClose={onClose}>
-        <h2 className="mb16">Loan queued — 24-hour cooldown</h2>
+        <h2 className="mb16">Held for confirmation</h2>
         <div className="notice warn mb16">
-          Lending from the deep reserve waits 24 hours before it's real, exactly
-          like a deep withdrawal. Confirm it tomorrow from the Vault; it's fully
-          reversible until you do. Your net worth won't change when it settles —
-          the cash becomes a claim of equal value.
+          Lending from principal settles tomorrow. Confirm it from the Vault;
+          reversible until then. Net worth holds when it settles — the funds
+          become a claim of equal value.
         </div>
         <button className="btn btn-primary" onClick={onClose}>
           Understood
@@ -285,8 +281,8 @@ function LendDialog({ onClose }: { onClose: () => void }) {
     <Modal onClose={onClose}>
       <h2 className="mb16">Lend money</h2>
       <div className="status-line mb16">
-        The amount leaves the layer you choose and becomes a receivable. Your
-        net worth stays flat; your liquidity correctly drops.
+        The amount leaves the chosen layer and becomes a claim. Net worth holds;
+        liquidity falls.
       </div>
 
       <div className="field">
@@ -331,17 +327,15 @@ function LendDialog({ onClose }: { onClose: () => void }) {
       {/* runway consequence, shown before commitment */}
       {fromReserve && amountOk && newRunway != null && (
         <div className="notice warn mb16">
-          This loan drops your runway from {d.runwayMonths.toFixed(1)} → {Math.max(0, newRunway).toFixed(1)} months.
-          {layer === "deep" && (
-            <> It becomes confirmable in 24 hours and is reversible until you confirm. The Floor still applies.</>
-          )}
+          This draws on the reserve. Runway falls from {d.runwayMonths.toFixed(1)} to {Math.max(0, newRunway).toFixed(1)} months.
+          {layer === "deep" && <> Confirm tomorrow. The floor still applies.</>}
         </div>
       )}
       {error && <div className="notice block mb16">{error}</div>}
 
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-primary" disabled={!valid} onClick={submit}>
-          {layer === "deep" ? "Start 24-hour cooldown" : "Lend"}
+          {layer === "deep" ? "Confirm tomorrow" : "Lend"}
         </button>
         <button className="btn btn-quiet" onClick={onClose}>Cancel</button>
       </div>
@@ -365,8 +359,7 @@ function RepayDialog({ receivable, onClose }: { receivable: Receivable; onClose:
     <Modal onClose={onClose}>
       <h2 className="mb16">{receivable.person} repaid</h2>
       <div className="notice mb16">
-        The money comes home through your standard Split — tithe first, then
-        reserve, goals, your Regular, and surplus — exactly like any income.
+        Received through the standard allocation, as with any income.
       </div>
       <div className="field">
         <span className="label">Amount repaid (outstanding {fmtExact(outstanding, sym)})</span>
@@ -379,7 +372,7 @@ function RepayDialog({ receivable, onClose }: { receivable: Receivable; onClose:
           autoFocus
           onChange={(e) => setAmount(e.target.value)}
         />
-        <span className="field-hint">Partial is fine — the claim shrinks by what's repaid.</span>
+        <span className="field-hint">Partial amounts reduce the claim accordingly.</span>
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <button
@@ -393,7 +386,7 @@ function RepayDialog({ receivable, onClose }: { receivable: Receivable; onClose:
             else onClose();
           }}
         >
-          Log repayment
+          Record repayment
         </button>
         <button className="btn btn-quiet" onClick={onClose}>Cancel</button>
       </div>
@@ -416,9 +409,8 @@ function WriteOffDialog({ receivable, onClose }: { receivable: Receivable; onClo
     <Modal onClose={onClose}>
       <h2 className="mb16">Write off {receivable.person}'s {fmt(outstanding, sym)}</h2>
       <div className="notice mb16">
-        This removes the claim from your net worth and files it away calmly. No
-        badges, no lingering guilt. If they ever repay anyway, log it then as
-        normal income.
+        This removes the claim from net worth. If repaid later, record it as
+        income.
       </div>
       <div className="field">
         <span className="label">One line for your record</span>

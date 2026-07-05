@@ -25,20 +25,20 @@ export function Goals() {
     <div className="screen">
       <h1 className="page-title">Goals</h1>
       <p className="page-sub">
-        Accumulating goals pile up as tied worth. Provisions hold liquid money
-        that's already spoken for.
+        Objectives accumulate as committed worth. Provisions hold funds already
+        assigned against known obligations.
       </p>
 
       {/* -------- accumulating -------- */}
       <div className="row mb16">
-        <h2>Accumulating</h2>
+        <h2>Objectives</h2>
         <button className="btn" onClick={() => setAdding("accumulating")}>
-          Add goal
+          Add objective
         </button>
       </div>
 
       {feasibility.length === 0 && (
-        <div className="card status-line">Nothing yet. Land? A house? A lump to invest?</div>
+        <div className="card status-line">Nothing requires your attention.</div>
       )}
 
       {feasibility.map((f) => (
@@ -46,10 +46,10 @@ export function Goals() {
           <div className="row">
             <h2>{f.goal.name}</h2>
             <span>
-              {f.state === "funded" && <span className="chip ok">funded</span>}
-              {f.state === "on_track" && <span className="chip ok">on track</span>}
-              {f.state === "stretch" && <span className="chip warn">stretch</span>}
-              {f.state === "wishful" && <span className="chip warn">wishful</span>}
+              {f.state === "funded" && <span className="chip ok">Funded</span>}
+              {f.state === "on_track" && <span className="chip ok">On schedule</span>}
+              {f.state === "stretch" && <span className="chip warn">With discipline</span>}
+              {f.state === "wishful" && <span className="chip warn">Underfunded</span>}
             </span>
           </div>
 
@@ -62,48 +62,45 @@ export function Goals() {
               {fmt(f.balance, sym)} of {fmt(f.goal.target, sym)} ·{" "}
               {Math.round(f.progressPct)}%
             </span>
-            <span className="status-line">target {fmtDate(f.goal.targetDate)}</span>
+            <span className="status-line">{fmtDate(f.goal.targetDate)}</span>
           </div>
 
           <hr className="hairline" />
 
           {f.state === "funded" && (
-            <div className="status-line green">Fully funded. Well built.</div>
+            <div className="status-line green">Funded.</div>
           )}
 
           {f.state === "on_track" && (
             <div className="status-line">
-              Needs ~{fmt(f.requiredMonthly, sym)}/month; current pace sends ~
-              {fmt(f.expectedWithSurplus, sym)}/month.
-              {f.projectedDate && <> Projected completion {fmtMonth(f.projectedDate)}.</>}
+              Funded on schedule. Requires {fmt(f.requiredMonthly, sym)} monthly;
+              {" "}{fmt(f.expectedWithSurplus, sym)} provided.
+              {f.projectedDate && <> Completion {fmtMonth(f.projectedDate)}.</>}
             </div>
           )}
 
           {f.state === "stretch" && (
             <div className="status-line amber">
-              Possible if surplus stays high. Base contributions send ~
-              {fmt(f.expectedMonthly, sym)}/month of the ~
-              {fmt(f.requiredMonthly, sym)}/month needed; surplus sweeps cover
-              the rest at your current income.
-              {f.projectedDate && <> Projected {fmtMonth(f.projectedDate)}.</>}
+              Achievable with discipline. Base allocation {fmt(f.expectedMonthly, sym)}
+              {" "}of {fmt(f.requiredMonthly, sym)} monthly; surplus covers the
+              balance at current income.
+              {f.projectedDate && <> Completion {fmtMonth(f.projectedDate)}.</>}
             </div>
           )}
 
           {f.state === "wishful" && (
             <div className="status-line amber">
-              The math doesn't close at your current pace (~
-              {fmt(f.expectedWithSurplus, sym)}/month vs ~
-              {fmt(f.requiredMonthly, sym)}/month needed).{" "}
+              Underfunded.{" "}
               {f.neededMonthlyIncome != null && d.avgMonthlyIncome > 0 && (
                 <>
-                  To hit {f.goal.name} by {fmtMonth(f.goal.targetDate)}, you'd
-                  need ~{fmt(f.neededMonthlyIncome, sym)}/month income — about{" "}
-                  {fmt(f.neededMonthlyIncome - d.avgMonthlyIncome, sym)}/month
-                  more than your 3-month average.{" "}
+                  Funding {f.goal.name} by {fmtMonth(f.goal.targetDate)} requires{" "}
+                  {fmt(f.neededMonthlyIncome, sym)} monthly — {" "}
+                  {fmt(f.neededMonthlyIncome - d.avgMonthlyIncome, sym)} above
+                  your three-month average.{" "}
                 </>
               )}
               {f.achievableDate && (
-                <>Or move the date to {fmtMonth(f.achievableDate)}.</>
+                <>Alternatively, {fmtMonth(f.achievableDate)}.</>
               )}
             </div>
           )}
@@ -125,10 +122,7 @@ export function Goals() {
       </div>
 
       {provisions.length === 0 && (
-        <div className="card status-line">
-          No provisions. Rent, insurance, school fees — money that should be
-          set aside before it's due.
-        </div>
+        <div className="card status-line">Nothing requires your attention.</div>
       )}
 
       {provisions.map((g) => {
@@ -148,10 +142,10 @@ export function Goals() {
               </h2>
               <span className="status-line">
                 {days < 0
-                  ? `due ${fmtDate(g.targetDate)} — overdue`
+                  ? `Due ${fmtDate(g.targetDate)}. Overdue.`
                   : days === 0
-                    ? "due today"
-                    : `due ${fmtDate(g.targetDate)} · ${plural(days, "day")}`}
+                    ? "Due today."
+                    : `Due ${fmtDate(g.targetDate)} · ${plural(days, "day")}`}
               </span>
             </div>
             <div className={`meter mt8 ${funded ? "" : "dim"}`}>
@@ -159,8 +153,8 @@ export function Goals() {
             </div>
             <div className="row mt8">
               <span className="status-line">
-                {fmt(bal, sym)} of {fmt(g.target, sym)} set aside
-                {funded ? " — ready" : ""}
+                {fmt(bal, sym)} of {fmt(g.target, sym)} held
+                {funded ? ". Ready." : ""}
               </span>
               <span style={{ display: "flex", gap: 8 }}>
                 <button className="btn btn-quiet" onClick={() => setEditing(g)}>
@@ -176,7 +170,7 @@ export function Goals() {
                     if (err) alert(err);
                   }}
                 >
-                  Mark paid
+                  Settle
                 </button>
               </span>
             </div>

@@ -23,34 +23,34 @@ interface Slide {
 
 const SLIDES: Slide[] = [
   {
-    tag: "01 · Welcome",
-    title: "Regular — never not saving",
-    body: "You set your rules once, calmly. From then on every dollar that enters is split automatically, and your only job is to live on a fixed weekly allowance — your Regular. Ignore the app for two weeks and nothing breaks.",
+    tag: "01 · Regular",
+    title: "Your affairs, in order.",
+    body: "You set the instructions once. Thereafter each amount received is allocated to them. Your part is to live within a fixed weekly allowance. The rest is handled.",
   },
   {
-    tag: "02 · Money in",
-    title: "Log it and forget it",
-    body: "The one thing the app asks of you: log income — amount, source, done in seconds. Instantly it splits into giving first, then your reserve, your goals, your Regular, and any surplus. You watch the receipt; the rules do the work.",
+    tag: "02 · Income",
+    title: "Record what arrives.",
+    body: "Enter the amount and its source. It is allocated at once — giving, reserve, objectives, your allowance, any surplus. A receipt is filed for each.",
   },
   {
-    tag: "03 · The Vault",
-    title: "Four layers, four doors",
-    body: "Your money sits in layers by how reachable it should be: Regular to spend freely, provisions set aside for bills, an accessible reserve for life's surprises, and a deep reserve behind a heavy door — typed reason, a consequence shown first, and a 24-hour cooldown. The Floor can never be crossed.",
+    tag: "03 · Reserves",
+    title: "Held in four layers.",
+    body: "Funds sit by how readily they should be reached. An allowance to spend. Provisions against known obligations. An accessible reserve on call. Principal, behind a day's delay. The floor does not move.",
   },
   {
-    tag: "04 · Goals",
-    title: "An honest advisor",
-    body: "Set what you're saving toward and by when. Regular tells you plainly whether you're on track, stretching, or wishful — and if the math doesn't close, it tells you exactly what income or date would make it real. Never alarm-red, always actionable.",
+    tag: "04 · Objectives",
+    title: "The position, stated plainly.",
+    body: "Name what you are funding and by when. Each is marked funded on schedule, achievable with discipline, or underfunded. Where it is underfunded, the required figure is given.",
   },
   {
-    tag: "05 · Receivables",
-    title: "Money owed to you",
-    body: "Lend money or record a debt someone owes you. It counts toward your net worth at a confidence-weighted haircut — but never as cash. It can never inflate what you think you can spend, and lending from the reserve carries the same friction as any withdrawal.",
+    tag: "05 · Amounts owed",
+    title: "Claims, not cash.",
+    body: "Record debts owed to you, or lend from a chosen layer. They count toward net worth at a confidence weight, never as available funds. Lending from the reserve carries the same conditions as a withdrawal.",
   },
   {
-    tag: "06 · Your laws",
-    title: "You're in control",
-    body: "Every percentage, target, and behavior lives under Rules — edit them deliberately, on your best day. Your whole ledger exports to a JSON file anytime, and everything you do is on the record in the Ledger. Open the app, feel your finances are intact.",
+    tag: "06 · Instructions",
+    title: "Everything on the record.",
+    body: "Every rate and target is set under Instructions, and adjusted only there. The full statement is available at any time, and exports in one file. Open the app; find your affairs in order.",
   },
 ];
 

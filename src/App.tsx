@@ -14,13 +14,13 @@ import { Ledger } from "./components/Ledger";
 import { Rules } from "./components/Rules";
 
 const NAV: { id: Screen; label: string; hint: string }[] = [
-  { id: "console", label: "Console", hint: "ten seconds to reassurance" },
-  { id: "money-in", label: "Money in", hint: "the only required act" },
-  { id: "goals", label: "Goals", hint: "two species" },
-  { id: "vault", label: "Vault", hint: "four layers, four doors" },
-  { id: "assets", label: "Assets", hint: "outside worth" },
-  { id: "ledger", label: "Ledger", hint: "the record" },
-  { id: "rules", label: "Rules", hint: "your laws" },
+  { id: "console", label: "Console", hint: "Overview" },
+  { id: "money-in", label: "Money in", hint: "Record income" },
+  { id: "goals", label: "Goals", hint: "Objectives" },
+  { id: "vault", label: "Vault", hint: "Reserves" },
+  { id: "assets", label: "Assets", hint: "Holdings" },
+  { id: "ledger", label: "Ledger", hint: "Statement" },
+  { id: "rules", label: "Rules", hint: "Instructions" },
 ];
 
 export default function App() {
@@ -48,12 +48,12 @@ export default function App() {
     cloudStatus === "disabled"
       ? null
       : cloudStatus === "synced"
-        ? "synced"
+        ? "Synced."
         : cloudStatus === "syncing"
-          ? "syncing…"
+          ? "Syncing."
           : cloudStatus === "error"
-            ? "sync error — data safe locally"
-            : "local only";
+            ? "Sync failed. Records held locally."
+            : "Held locally.";
 
   return (
     <div className="shell">
@@ -61,7 +61,7 @@ export default function App() {
       <aside className="rail">
         <div className="rail-brand">
           <div className="wordmark">REGULAR</div>
-          <div className="tagline">never not saving</div>
+          <div className="tagline">Your affairs, in order.</div>
         </div>
         <nav className="rail-nav">
           {NAV.map((n) => (
@@ -76,11 +76,7 @@ export default function App() {
           ))}
         </nav>
         <div className="rail-foot">
-          {derived.inRecovery ? (
-            <span className="amber">recovery · refilling</span>
-          ) : (
-            <span>all systems nominal</span>
-          )}
+          {derived.inRecovery && <span className="amber">Rebuilding underway.</span>}
           {syncLabel && (
             <div style={{ marginTop: 6 }} className={cloudStatus === "error" ? "amber" : "faint"}>
               {syncLabel}
@@ -88,7 +84,7 @@ export default function App() {
           )}
           {isSeeded && (
             <div style={{ marginTop: 6 }} className="faint">
-              example data · wipe in Rules
+              Sample records. Clear in Rules.
             </div>
           )}
         </div>

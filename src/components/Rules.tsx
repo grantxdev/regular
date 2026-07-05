@@ -56,22 +56,19 @@ export function Rules() {
   return (
     <div className="screen">
       <h1 className="page-title">Rules</h1>
-      <p className="page-sub">
-        These are your laws — set calmly, on your best day, so your worst day
-        doesn't get a vote.
-      </p>
+      <p className="page-sub">Standing instructions. Set them deliberately.</p>
 
       <div className="card">
         <div className="row mb16">
-          <span className="label">The Split</span>
+          <span className="label">Allocation</span>
           {!unlocked ? (
             <button className="btn" onClick={unlock}>
-              Amend the laws
+              Amend
             </button>
           ) : (
             <span style={{ display: "flex", gap: 8 }}>
               <button className="btn btn-primary" onClick={save}>
-                Enact changes
+                Confirm changes
               </button>
               <button className="btn btn-quiet" onClick={() => setUnlocked(false)}>
                 Cancel
@@ -82,7 +79,7 @@ export function Rules() {
 
         <div className="grid2">
           <div className="field">
-            <span className="label">Giving — % off the top, always first</span>
+            <span className="label">Giving — % off the top, first</span>
             {num("tithePercent", { step: "0.5", max: 100 })}
           </div>
           <div className="field">
@@ -90,9 +87,9 @@ export function Rules() {
             {num("reservePercent", { step: "0.5", max: 100 })}
           </div>
           <div className="field">
-            <span className="label">Regular — weekly allowance ({sym})</span>
+            <span className="label">Allowance — weekly ({sym})</span>
             {num("regularWeekly", { step: "5" })}
-            <span className="field-hint">Sacred. It only changes here, deliberately.</span>
+            <span className="field-hint">Adjusted here only.</span>
           </div>
           <div className="field">
             <span className="label">Living expenses — monthly ({sym})</span>
@@ -174,18 +171,17 @@ export function Rules() {
         </div>
         <div className="status-line mt8">
           Current target: {fmt(reserveTargetOf(view), sym)} · Floor:{" "}
-          {fmt(floorOf(view), sym)} (whichever is greater) — a hard block, never
-          a warning.
+          {fmt(floorOf(view), sym)} (whichever is greater). Fixed.
         </div>
 
         <hr className="hairline" />
-        <div className="label mb16">Recovery mode & misc</div>
+        <div className="label mb16">Rebuilding & other</div>
         <div className="grid2">
           <div className="field">
-            <span className="label">Recovery — share of goal flow to reserve (0–1)</span>
+            <span className="label">Rebuilding — share of objective flow to reserve (0–1)</span>
             {num("recoveryReserveShare", { step: "0.05", max: 1 })}
             <span className="field-hint">
-              Goals keep the rest as a heartbeat — never not saving.
+              Objectives retain the remainder.
             </span>
           </div>
           <div className="field">
@@ -229,8 +225,7 @@ export function Rules() {
           </button>
         </div>
         <div className="status-line mt8">
-          Life is messy. Add or remove money from any bucket, always with a
-          one-line reason logged to history.
+          Adjust any balance. A reason is recorded.
         </div>
       </div>
 
@@ -240,17 +235,17 @@ export function Rules() {
           <div className="row">
             <span className="label">Account</span>
             <span className="status-line">
-              {cloudStatus === "synced" && <span className="green">synced</span>}
-              {cloudStatus === "syncing" && "syncing…"}
-              {cloudStatus === "error" && <span className="amber">sync error — data safe locally</span>}
-              {cloudStatus === "signedOut" && "local only"}
+              {cloudStatus === "synced" && <span className="green">Synced.</span>}
+              {cloudStatus === "syncing" && "Syncing."}
+              {cloudStatus === "error" && <span className="amber">Sync failed. Records held locally.</span>}
+              {cloudStatus === "signedOut" && "Held locally."}
             </span>
           </div>
           {accountEmail ? (
             <>
               <div className="status-line mt8">
-                Signed in as <span className="mono">{accountEmail}</span>. Your
-                ledger syncs to your private database on every change.
+                Signed in as <span className="mono">{accountEmail}</span>. Records
+                sync privately.
               </div>
               <button className="btn mt16" onClick={() => void signOut()}>
                 Sign out
@@ -258,8 +253,7 @@ export function Rules() {
             </>
           ) : (
             <div className="status-line mt8">
-              Not signed in — everything stays in this browser. Reload the app
-              to reach the sign-in screen.
+              Not signed in. Records are held on this device. Reload to sign in.
             </div>
           )}
         </div>
@@ -267,7 +261,7 @@ export function Rules() {
 
       {/* data */}
       <div className="card mt16">
-        <div className="label mb16">Your data</div>
+        <div className="label mb16">Records</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn" onClick={exportData}>
             Export JSON
@@ -279,24 +273,24 @@ export function Rules() {
             <button
               className="btn btn-danger"
               onClick={() => {
-                if (confirm("Wipe the example data and start clean?")) wipeAll();
+                if (confirm("Clear the sample records and begin fresh?")) wipeAll();
               }}
             >
-              Wipe example data
+              Clear sample records
             </button>
           ) : (
             <>
               <button
                 className="btn btn-danger"
                 onClick={() => {
-                  if (confirm("Erase EVERYTHING? Export first if in doubt.")) wipeAll();
+                  if (confirm("Erase all records? Export first if in doubt.")) wipeAll();
                 }}
               >
-                Wipe all data
+                Erase all records
               </button>
               {data.events.length === 0 && (
                 <button className="btn" onClick={loadExample}>
-                  Load example data
+                  Load sample records
                 </button>
               )}
             </>
@@ -317,14 +311,13 @@ export function Rules() {
         />
         {importError && <div className="notice block mt16">{importError}</div>}
         <div className="status-line mt8">
-          Everything lives in this browser's storage. Export regularly; the
-          file restores you completely.
+          Records are held in this browser. Export periodically.
         </div>
         <button
           className="btn btn-quiet mt16"
           onClick={() => window.dispatchEvent(new Event("regular:show-tour"))}
         >
-          Replay the welcome tour
+          Review the introduction
         </button>
       </div>
 
