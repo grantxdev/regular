@@ -6,7 +6,7 @@
 import { useState } from "react";
 import type { Screen } from "../types";
 import { useStore } from "../store";
-import { fmt, fmtDate, fmtMonth, plural, startOfWeek, addDays, parseISO, DAY_MS } from "../lib/util";
+import { fmt, fmtDate, fmtMonth, plural, parseISO, DAY_MS } from "../lib/util";
 import {
   AllocationRing,
   NetWorthChart,
@@ -43,12 +43,6 @@ export function Console({ go }: { go: (s: Screen) => void }) {
       r.expectedDate &&
       parseISO(r.expectedDate).getTime() < now &&
       !dismissed.has(r.id)
-  );
-
-  const weekEnd = addDays(startOfWeek(new Date()), 7);
-  const daysLeft = Math.max(
-    1,
-    Math.ceil((weekEnd.getTime() - Date.now()) / 86_400_000)
   );
 
   const dueSoon = data.goals.filter(
@@ -138,22 +132,13 @@ export function Console({ go }: { go: (s: Screen) => void }) {
       {/* week + reserve status */}
       <div className="grid2 mt16">
         <div className="card">
-          <div className="row">
-            <span className="label">This week's allowance</span>
-            <span className="status-line faint">{plural(daysLeft, "day")} remaining</span>
+          <div className="label mb8">Allowance</div>
+          <div className="big-num">
+            {fmt(data.settings.regularWeekly, sym)}
+            <span className="dim" style={{ fontSize: "0.85rem", fontWeight: 400 }}> / week</span>
           </div>
-          <div className="big-num mt8">
-            {fmt(d.regularRemaining, sym)}
-            <span className="dim" style={{ fontSize: "0.85rem", fontWeight: 400 }}>
-              {" "}/ {fmt(data.settings.regularWeekly, sym)}
-            </span>
-          </div>
-          <div className="meter mt8">
-            <div
-              style={{
-                width: `${Math.max(0, Math.min(100, (d.regularRemaining / Math.max(data.settings.regularWeekly, 1)) * 100))}%`,
-              }}
-            />
+          <div className="status-line mt8">
+            {fmt((data.settings.regularWeekly * 52) / 12, sym)} / month.
           </div>
         </div>
 
