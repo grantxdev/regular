@@ -12,6 +12,7 @@
 import type {
   AppData,
   Asset,
+  Confidence,
   Goal,
   LedgerEvent,
   Settings,
@@ -52,10 +53,16 @@ export interface Derived {
   provisionsTotal: number;
   tiedTotal: number; // accumulating goal balances
 
+  /* receivables — claims, never liquid */
+  receivableOutstanding: Record<string, number>;
+  receivablesFullValue: number; // outstanding of active receivables, no haircut
+  receivablesWeighted: number; // confidence-weighted contribution to net worth
+
   /* rollups */
   cashTotal: number;
   assetsTotal: number;
-  netWorth: number;
+  netWorth: number; // cash + assets + weighted receivables
+  netWorthIfAllRepaid: number; // cash + assets + full receivables
   liquidWorth: number;
   givenTotal: number;
 
@@ -85,6 +92,15 @@ export function floorOf(s: Settings): number {
   return Math.max(s.floorMonths * s.livingExpensesMonthly, s.floorAmount);
 }
 
+/** Confidence-weighted haircut for a receivable's contribution to net worth. */
+export function confidenceWeight(c: Confidence, s: Settings): number {
+  return c === "certain"
+    ? s.receivableWeightCertain
+    : c === "likely"
+      ? s.receivableWeightLikely
+      : s.receivableWeightHopeful;
+}
+
 /** Vehicle values decay on a simple exponential curve from their last update. */
 export function assetValueAt(asset: Asset, at: Date, s: Settings): number {
   if (asset.category !== "vehicle") return asset.value;
@@ -105,6 +121,8 @@ interface Buckets {
   surplus: number;
   given: number;
   goals: Record<string, number>;
+  /** Outstanding principal per receivable id. */
+  recv: Record<string, number>;
   recovery: boolean;
 }
 
@@ -158,6 +176,53 @@ function applyEvent(b: Buckets, e: LedgerEvent): void {
     case "asset":
       // Asset events are audit trail only; asset values live on the asset records.
       break;
+
+    /* ---- receivables ---- */
+    case "receivable_added":
+      // Recording a pre-existing claim: no cash moves, the receivable appears.
+      b.recv[e.receivableId] = r2((b.recv[e.receivableId] ?? 0) + e.amount);
+      break;
+    case "lend": {
+      // Cash leaves the chosen layer and becomes a claim. Net worth is flat
+      // (at full confidence); liquidity in that layer correctly drops.
+      if (e.layer === "accessible" || e.layer === "deep") {
+        b.reserve = r2(clampMin0(b.reserve - e.amount));
+      } else if (e.layer === "surplus") {
+        b.surplus = r2(clampMin0(b.surplus - e.amount));
+      } else if (e.layer === "regular") {
+        b.regular = r2(clampMin0(b.regular - e.amount));
+      } else if (e.layer === "goal" && e.goalId) {
+        b.goals[e.goalId] = r2(clampMin0((b.goals[e.goalId] ?? 0) - e.amount));
+      }
+      b.recv[e.receivableId] = r2((b.recv[e.receivableId] ?? 0) + e.amount);
+      break;
+    }
+    case "receivable_repaid": {
+      // The money comes home through the standard Split, exactly like income.
+      const s = e.split;
+      b.given = r2(b.given + s.giving);
+      b.reserve = r2(b.reserve + s.reserve);
+      b.regular = r2(b.regular + s.regular);
+      for (const a of s.goals) {
+        b.goals[a.goalId] = r2((b.goals[a.goalId] ?? 0) + a.amount);
+      }
+      if (s.surplus > 0) {
+        if (s.surplusTarget === "top_goal" && s.surplusGoalId) {
+          b.goals[s.surplusGoalId] = r2((b.goals[s.surplusGoalId] ?? 0) + s.surplus);
+        } else if (s.surplusTarget === "reserve") {
+          b.reserve = r2(b.reserve + s.surplus);
+        } else {
+          b.surplus = r2(b.surplus + s.surplus);
+        }
+      }
+      // The claim shrinks (never below zero — overpayment is pure income).
+      b.recv[e.receivableId] = r2(clampMin0((b.recv[e.receivableId] ?? 0) - e.amount));
+      break;
+    }
+    case "receivable_writeoff":
+      // The outstanding claim leaves net worth; it does not touch any cash layer.
+      b.recv[e.receivableId] = 0;
+      break;
   }
 }
 
@@ -178,9 +243,11 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
     surplus: 0,
     given: 0,
     goals: {},
+    recv: {},
     recovery: false,
   };
 
+  const recvById = new Map(data.receivables.map((r) => [r.id, r]));
   const sweeps: SweepRecord[] = [];
   const history: HistoryPoint[] = [];
 
@@ -201,8 +268,22 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
     return r2(bk.reserve + bk.regular + bk.surplus + goalsSum);
   };
 
+  /** Confidence-weighted value of live claims — the net-worth contribution. */
+  const receivablesWeightedOf = (bk: Buckets): number => {
+    let total = 0;
+    for (const [id, out] of Object.entries(bk.recv)) {
+      const rec = recvById.get(id);
+      if (!rec || out <= 0 || rec.status === "written_off") continue;
+      total += out * confidenceWeight(rec.confidence, s);
+    }
+    return r2(total);
+  };
+
   const snapshot = (at: Date) => {
-    history.push({ date: at.toISOString(), netWorth: r2(cashOf(b) + assetsAt(at)) });
+    history.push({
+      date: at.toISOString(),
+      netWorth: r2(cashOf(b) + assetsAt(at) + receivablesWeightedOf(b)),
+    });
   };
 
   /** Week-boundary bookkeeping: sweep unspent Regular above one week's allowance. */
@@ -307,6 +388,20 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
   const cashTotal = cashOf(b);
   const assetsTotal = assetsAt(now);
 
+  /* receivables — never liquid; counted in net worth at a haircut only */
+  const receivableOutstanding: Record<string, number> = {};
+  let receivablesFullValue = 0;
+  let receivablesWeighted = 0;
+  for (const [id, out] of Object.entries(b.recv)) {
+    const rec = recvById.get(id);
+    if (!rec || out <= 0 || rec.status === "written_off") continue;
+    receivableOutstanding[id] = out;
+    receivablesFullValue += out;
+    receivablesWeighted += out * confidenceWeight(rec.confidence, s);
+  }
+  receivablesFullValue = r2(receivablesFullValue);
+  receivablesWeighted = r2(receivablesWeighted);
+
   return {
     reserve: b.reserve,
     accessible,
@@ -318,11 +413,17 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
     goalBalances: b.goals,
     provisionsTotal,
     tiedTotal,
+    receivableOutstanding,
+    receivablesFullValue,
+    receivablesWeighted,
     cashTotal,
     assetsTotal,
-    netWorth: r2(cashTotal + assetsTotal),
+    // Receivables raise net worth (at a haircut) but never liquidity.
+    netWorth: r2(cashTotal + assetsTotal + receivablesWeighted),
+    netWorthIfAllRepaid: r2(cashTotal + assetsTotal + receivablesFullValue),
     liquidWorth: r2(b.reserve + b.regular + b.surplus + provisionsTotal),
     givenTotal: b.given,
+    // Liquidity feelings deliberately exclude receivables.
     availableToday: r2(regularRemaining + b.surplus),
     accessibleIfNeeded: accessible,
     protectedTotal: r2(deep + provisionsTotal + tiedTotal + assetsTotal),

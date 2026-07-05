@@ -6,9 +6,17 @@
 
 import { useMemo, useState } from "react";
 import { useStore } from "../store";
-import type { IncomeEvent, LedgerEvent } from "../types";
+import type { LedgerEvent, SplitResult } from "../types";
 import { fmtExact, fmtDate, parseISO } from "../lib/util";
 import { Modal, SplitReceipt } from "./shared";
+
+/** A split receipt to show in the modal — from income or a repayment. */
+interface Receipt {
+  date: string;
+  label: string;
+  amount: number;
+  split: SplitResult;
+}
 
 interface Row {
   key: string;
@@ -23,7 +31,7 @@ export function Ledger() {
   const { data, derived: d, exportData } = useStore();
   const sym = data.settings.currencySymbol;
   const [query, setQuery] = useState("");
-  const [receipt, setReceipt] = useState<IncomeEvent | null>(null);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
@@ -70,6 +78,34 @@ export function Ledger() {
           out.push({
             key: e.id, date, kind: `asset ${e.action}`,
             detail: `${e.name} at ${fmtExact(e.value, sym)}${e.reason ? ` — "${e.reason}"` : ""}`,
+            amount: null,
+          });
+          break;
+        case "receivable_added":
+          out.push({
+            key: e.id, date, kind: "receivable added",
+            detail: `${e.person} owes you (${e.confidence})`,
+            amount: null,
+          });
+          break;
+        case "lend":
+          out.push({
+            key: e.id, date, kind: `lend · ${e.layer}`,
+            detail: `Lent to ${e.person} (${e.confidence})${e.reason ? ` — "${e.reason}"` : ""}`,
+            amount: -e.amount,
+          });
+          break;
+        case "receivable_repaid":
+          out.push({
+            key: e.id, date, kind: "repayment",
+            detail: `${e.person} repaid — split across ${e.split.goals.length} goal${e.split.goals.length === 1 ? "" : "s"}${e.wasWrittenOff ? " (previously written off)" : ""}`,
+            amount: e.amount, event: e,
+          });
+          break;
+        case "receivable_writeoff":
+          out.push({
+            key: e.id, date, kind: "write-off",
+            detail: `${e.person}'s ${fmtExact(e.amount, sym)} — "${e.reason}"`,
             amount: null,
           });
           break;
@@ -131,9 +167,23 @@ export function Ledger() {
             {filtered.map((r) => (
               <tr
                 key={r.key}
-                style={r.event?.type === "income" ? { cursor: "pointer" } : undefined}
+                style={
+                  r.event?.type === "income" || r.event?.type === "receivable_repaid"
+                    ? { cursor: "pointer" }
+                    : undefined
+                }
                 onClick={() => {
-                  if (r.event?.type === "income") setReceipt(r.event);
+                  if (r.event?.type === "income") {
+                    setReceipt({
+                      date: r.event.date, label: r.event.source,
+                      amount: r.event.amount, split: r.event.split,
+                    });
+                  } else if (r.event?.type === "receivable_repaid") {
+                    setReceipt({
+                      date: r.event.date, label: `${r.event.person} repaid`,
+                      amount: r.event.amount, split: r.event.split,
+                    });
+                  }
                 }}
               >
                 <td className="mono faint" style={{ whiteSpace: "nowrap", fontSize: 12 }}>
@@ -166,7 +216,7 @@ export function Ledger() {
       {receipt && (
         <Modal onClose={() => setReceipt(null)}>
           <div className="label mb8">
-            {fmtDate(receipt.date)} · {receipt.source}
+            {fmtDate(receipt.date)} · {receipt.label}
           </div>
           <SplitReceipt amount={receipt.amount} split={receipt.split} symbol={sym} />
           <button className="btn btn-quiet mt16" onClick={() => setReceipt(null)}>

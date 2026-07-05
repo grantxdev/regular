@@ -9,9 +9,12 @@ import type {
   AppData,
   Asset,
   AssetCategory,
+  Confidence,
   Goal,
   GoalKind,
+  LendLayer,
   PendingWithdrawal,
+  Receivable,
   Recurrence,
 } from "../types";
 import { deriveState, floorOf, reserveTargetOf } from "./replay";
@@ -141,7 +144,9 @@ export function requestDeepWithdrawal(
   return null;
 }
 
-/** Deep door, step 2: confirm after the 24h cooldown. Enters recovery mode. */
+/** Deep door, step 2: confirm after the 24h cooldown.
+ *  A withdrawal enters recovery mode; a loan does not (the money is a claim
+ *  expected back, and repayment refills the reserve through the normal Split). */
 export function confirmDeepWithdrawal(
   data: AppData,
   pendingId: string,
@@ -155,6 +160,34 @@ export function confirmDeepWithdrawal(
   }
   const d = deriveState(data, at);
   data.pendingWithdrawals.splice(idx, 1);
+
+  if (p.lend) {
+    // Convert the deep-reserve cash into a receivable claim.
+    const rec: Receivable = {
+      id: uid(),
+      person: p.lend.person,
+      amount: p.amount,
+      expectedDate: p.lend.expectedDate,
+      note: p.lend.note,
+      confidence: p.lend.confidence,
+      status: "active",
+      createdAt: at.toISOString(),
+    };
+    data.receivables.push(rec);
+    data.events.push({
+      id: uid(),
+      type: "lend",
+      date: at.toISOString(),
+      receivableId: rec.id,
+      person: rec.person,
+      amount: p.amount,
+      layer: "deep",
+      confidence: rec.confidence,
+      reason: p.reason,
+    });
+    return null;
+  }
+
   data.events.push({
     id: uid(),
     type: "withdrawal",
@@ -355,4 +388,202 @@ export function removeAsset(
     value: asset.value,
     reason,
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Receivables — a claim, never cash                                   */
+/* ------------------------------------------------------------------ */
+
+/** Record a claim that already existed (someone owed you). No cash moves. */
+export function addReceivable(
+  data: AppData,
+  input: {
+    person: string;
+    amount: number;
+    expectedDate?: string | null;
+    note?: string;
+    confidence: Confidence;
+  },
+  at: Date = new Date()
+): Receivable {
+  const rec: Receivable = {
+    id: uid(),
+    person: input.person.trim(),
+    amount: r2(input.amount),
+    expectedDate: input.expectedDate ?? null,
+    note: input.note?.trim() ?? "",
+    confidence: input.confidence,
+    status: "active",
+    createdAt: at.toISOString(),
+  };
+  data.receivables.push(rec);
+  data.events.push({
+    id: uid(),
+    type: "receivable_added",
+    date: at.toISOString(),
+    receivableId: rec.id,
+    person: rec.person,
+    amount: rec.amount,
+    confidence: rec.confidence,
+  });
+  return rec;
+}
+
+export function updateReceivable(data: AppData, rec: Receivable): void {
+  const idx = data.receivables.findIndex((r) => r.id === rec.id);
+  if (idx !== -1) data.receivables[idx] = { ...rec, amount: r2(rec.amount) };
+}
+
+/** Available to lend from a given layer right now (Floor enforced on deep). */
+export function lendableFrom(data: AppData, layer: LendLayer, goalId: string | undefined, at: Date): number {
+  const d = deriveState(data, at);
+  switch (layer) {
+    case "accessible":
+      return d.accessible;
+    case "deep": {
+      const pendingTotal = data.pendingWithdrawals.reduce((s, p) => s + p.amount, 0);
+      return Math.max(0, r2(d.deep - floorOf(data.settings) - pendingTotal));
+    }
+    case "surplus":
+      return d.surplusHeld;
+    case "regular":
+      return d.regularWallet;
+    case "goal":
+      return goalId ? d.goalBalances[goalId] ?? 0 : 0;
+  }
+}
+
+/**
+ * "Lend money" — convert cash into a receivable. Deep-reserve loans return a
+ * pending id (24h cooldown, like a deep withdrawal); every other layer settles
+ * immediately. The Floor is a hard block for lending too.
+ */
+export function lendMoney(
+  data: AppData,
+  input: {
+    person: string;
+    amount: number;
+    layer: LendLayer;
+    goalId?: string;
+    expectedDate?: string | null;
+    note?: string;
+    confidence: Confidence;
+    reason: string;
+  },
+  at: Date = new Date()
+): { error?: string; pending?: boolean } {
+  const amount = r2(input.amount);
+  const available = lendableFrom(data, input.layer, input.goalId, at);
+  if (amount <= 0) return { error: "Enter an amount to lend." };
+  if (amount > available + 0.005) {
+    return input.layer === "deep"
+      ? { error: `The Floor protects the deep reserve. Maximum lendable: ${available.toFixed(2)}.` }
+      : { error: `Only ${available.toFixed(2)} is available in that layer.` };
+  }
+
+  if (input.layer === "deep") {
+    // Heavy door: hold as pending; confirmed after 24h creates the receivable.
+    data.pendingWithdrawals.push({
+      id: uid(),
+      createdAt: at.toISOString(),
+      amount,
+      reason: input.reason.trim(),
+      confirmAfter: new Date(at.getTime() + 24 * HOUR_MS).toISOString(),
+      lend: {
+        person: input.person.trim(),
+        expectedDate: input.expectedDate ?? null,
+        note: input.note?.trim() ?? "",
+        confidence: input.confidence,
+      },
+    });
+    return { pending: true };
+  }
+
+  const goal = input.goalId ? data.goals.find((g) => g.id === input.goalId) : undefined;
+  const rec: Receivable = {
+    id: uid(),
+    person: input.person.trim(),
+    amount,
+    expectedDate: input.expectedDate ?? null,
+    note: input.note?.trim() ?? "",
+    confidence: input.confidence,
+    status: "active",
+    createdAt: at.toISOString(),
+  };
+  data.receivables.push(rec);
+  data.events.push({
+    id: uid(),
+    type: "lend",
+    date: at.toISOString(),
+    receivableId: rec.id,
+    person: rec.person,
+    amount,
+    layer: input.layer,
+    goalId: input.goalId,
+    goalName: goal?.name,
+    confidence: rec.confidence,
+    reason: input.reason.trim(),
+  });
+  return {};
+}
+
+/**
+ * "Repaid" (full or partial): the money comes home through the standard Split,
+ * exactly like income. Repaying a written-off debt is logged as income that
+ * references the old claim; the claim stays archived.
+ */
+export function repayReceivable(
+  data: AppData,
+  receivableId: string,
+  amount: number,
+  at: Date = new Date()
+): string | null {
+  const rec = data.receivables.find((r) => r.id === receivableId);
+  if (!rec) return "Receivable not found.";
+  const value = r2(amount);
+  if (value <= 0) return "Enter a repayment amount.";
+
+  const d = deriveState(data, at);
+  const split = computeSplit(value, data.settings, data.goals, d, at);
+  data.events.push({
+    id: uid(),
+    type: "receivable_repaid",
+    date: at.toISOString(),
+    receivableId: rec.id,
+    person: rec.person,
+    amount: value,
+    split,
+    wasWrittenOff: rec.status === "written_off" ? true : undefined,
+  });
+
+  if (rec.status === "active") {
+    const outstanding = d.receivableOutstanding[rec.id] ?? 0;
+    if (value >= outstanding - 0.005) rec.status = "repaid";
+  }
+  maybeExitRecovery(data, at);
+  return null;
+}
+
+/** Dignified write-off: the outstanding claim leaves net worth, logged calmly. */
+export function writeOffReceivable(
+  data: AppData,
+  receivableId: string,
+  reason: string,
+  at: Date = new Date()
+): string | null {
+  const rec = data.receivables.find((r) => r.id === receivableId);
+  if (!rec || rec.status !== "active") return "Receivable not found.";
+  const d = deriveState(data, at);
+  const outstanding = d.receivableOutstanding[rec.id] ?? 0;
+  data.events.push({
+    id: uid(),
+    type: "receivable_writeoff",
+    date: at.toISOString(),
+    receivableId: rec.id,
+    person: rec.person,
+    amount: r2(outstanding),
+    reason: reason.trim(),
+  });
+  rec.status = "written_off";
+  return null;
 }

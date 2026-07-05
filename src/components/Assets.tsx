@@ -10,6 +10,7 @@ import type { Asset, AssetCategory } from "../types";
 import { assetValueAt } from "../engine/replay";
 import { fmt, fmtDate, parseISO, DAY_MS } from "../lib/util";
 import { Modal } from "./shared";
+import { Receivables } from "./Receivables";
 
 const CATEGORIES: { value: AssetCategory; label: string }[] = [
   { value: "vehicle", label: "Vehicle (auto-depreciates)" },
@@ -122,6 +123,11 @@ export function Assets() {
           </div>
         );
       })}
+
+      {/* Receivables — money owed to me, distinct from owned assets. */}
+      <div style={{ borderTop: "1px solid var(--line-strong)", marginTop: 28, paddingTop: 4 }}>
+        <Receivables />
+      </div>
 
       {adding && (
         <AssetForm

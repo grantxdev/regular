@@ -48,6 +48,10 @@ export interface Settings {
   recoveryReserveShare: number;
   /** Annual depreciation applied to vehicle assets so the number never quietly lies. */
   vehicleDepreciationRate: number;
+  /** Confidence-weighted haircuts for receivables' contribution to net worth (0–1). */
+  receivableWeightCertain: number;
+  receivableWeightLikely: number;
+  receivableWeightHopeful: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -93,6 +97,32 @@ export interface Asset {
   lastUpdated: string; // ISO datetime
   createdAt: string;
 }
+
+/* ------------------------------------------------------------------ */
+/* Receivables — money owed to me. A claim, NEVER cash.                */
+/*                                                                     */
+/* A receivable never counts as liquid: it never appears in "Available */
+/* today" or "Accessible if needed" and never affects runway. It DOES  */
+/* count toward net worth, at a confidence-weighted haircut.           */
+/* ------------------------------------------------------------------ */
+
+export type Confidence = "certain" | "likely" | "hopeful";
+
+export interface Receivable {
+  id: string;
+  person: string;
+  /** Original principal claimed. Outstanding is derived from the ledger. */
+  amount: number;
+  /** Optional expected repayment date, ISO yyyy-mm-dd. */
+  expectedDate: string | null;
+  note: string;
+  confidence: Confidence;
+  status: "active" | "repaid" | "written_off";
+  createdAt: string;
+}
+
+/** Where a loan is funded from when converting cash into a receivable. */
+export type LendLayer = "accessible" | "deep" | "surplus" | "regular" | "goal";
 
 /* ------------------------------------------------------------------ */
 /* The Split — computed at income time, stored as fact on the event    */
@@ -185,6 +215,50 @@ export interface AssetEvent extends BaseEvent {
   reason?: string;
 }
 
+/* ---- receivables ---- */
+
+/** A claim recorded with no cash movement (someone already owed you). */
+export interface ReceivableAddedEvent extends BaseEvent {
+  type: "receivable_added";
+  receivableId: string;
+  person: string;
+  amount: number;
+  confidence: Confidence;
+}
+
+/** "Lend money" — cash leaves a layer and becomes a receivable. Net worth flat. */
+export interface LendEvent extends BaseEvent {
+  type: "lend";
+  receivableId: string;
+  person: string;
+  amount: number;
+  layer: LendLayer;
+  goalId?: string;
+  goalName?: string;
+  confidence: Confidence;
+  reason: string;
+}
+
+/** Repayment (full or partial): money enters the Bucket via the standard Split. */
+export interface ReceivableRepaidEvent extends BaseEvent {
+  type: "receivable_repaid";
+  receivableId: string;
+  person: string;
+  amount: number;
+  split: SplitResult;
+  /** True when repaying a debt that was previously written off. */
+  wasWrittenOff?: boolean;
+}
+
+/** Dignified write-off: removes the outstanding claim from net worth, logged. */
+export interface ReceivableWriteoffEvent extends BaseEvent {
+  type: "receivable_writeoff";
+  receivableId: string;
+  person: string;
+  amount: number; // outstanding written off
+  reason: string;
+}
+
 export type LedgerEvent =
   | IncomeEvent
   | SpendEvent
@@ -192,7 +266,11 @@ export type LedgerEvent =
   | ProvisionPaidEvent
   | AdjustmentEvent
   | RecoveryEvent
-  | AssetEvent;
+  | AssetEvent
+  | ReceivableAddedEvent
+  | LendEvent
+  | ReceivableRepaidEvent
+  | ReceivableWriteoffEvent;
 
 /* ------------------------------------------------------------------ */
 /* Deep-reserve withdrawals wait 24h here before becoming events        */
@@ -205,6 +283,13 @@ export interface PendingWithdrawal {
   reason: string;
   /** Earliest moment the user may confirm (createdAt + 24h). */
   confirmAfter: string;
+  /** When present, confirming this creates a receivable (a deep-reserve loan). */
+  lend?: {
+    person: string;
+    expectedDate: string | null;
+    note: string;
+    confidence: Confidence;
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -216,6 +301,7 @@ export interface AppData {
   settings: Settings;
   goals: Goal[];
   assets: Asset[];
+  receivables: Receivable[];
   events: LedgerEvent[];
   pendingWithdrawals: PendingWithdrawal[];
   /** Saved, reusable income source labels. */
@@ -239,6 +325,9 @@ export const DEFAULT_SETTINGS: Settings = {
   surplusBehavior: "top_goal",
   recoveryReserveShare: 0.8,
   vehicleDepreciationRate: 0.15,
+  receivableWeightCertain: 1.0,
+  receivableWeightLikely: 0.7,
+  receivableWeightHopeful: 0.3,
 };
 
 export function emptyData(settings?: Settings): AppData {
@@ -247,6 +336,7 @@ export function emptyData(settings?: Settings): AppData {
     settings: settings ?? { ...DEFAULT_SETTINGS },
     goals: [],
     assets: [],
+    receivables: [],
     events: [],
     pendingWithdrawals: [],
     incomeSources: [],

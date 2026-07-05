@@ -21,8 +21,10 @@ export const localStorageBackend: Storage = {
       if (!raw) return null;
       const parsed = JSON.parse(raw) as AppData;
       if (parsed.version !== 1) return null;
-      // Backfill any settings added after the document was first written.
+      // Backfill anything added after the document was first written.
       parsed.settings = { ...DEFAULT_SETTINGS, ...parsed.settings };
+      parsed.receivables ??= [];
+      parsed.pendingWithdrawals ??= [];
       return parsed;
     } catch {
       return null;
@@ -47,6 +49,7 @@ export function validateImport(raw: string): AppData {
     throw new Error("This file doesn't look like a Regular export.");
   }
   parsed.settings = { ...DEFAULT_SETTINGS, ...parsed.settings };
+  parsed.receivables ??= [];
   parsed.pendingWithdrawals ??= [];
   parsed.incomeSources ??= [];
   return parsed as AppData;

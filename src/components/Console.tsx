@@ -3,18 +3,47 @@
  * feelings, this week's Regular, the allocation ring, and a calm goal strip.
  */
 
+import { useState } from "react";
 import type { Screen } from "../types";
 import { useStore } from "../store";
-import { fmt, fmtDate, fmtMonth, plural, startOfWeek, addDays } from "../lib/util";
+import { fmt, fmtDate, fmtMonth, plural, startOfWeek, addDays, parseISO, DAY_MS } from "../lib/util";
 import {
   AllocationRing,
   NetWorthChart,
   TickerNumber,
 } from "./shared";
 
+/** Overdue receivable notices dismiss permanently — a claim is never a nag. */
+const DISMISS_KEY = "regular-dismissed-overdue-v1";
+function loadDismissed(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(DISMISS_KEY) ?? "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
 export function Console({ go }: { go: (s: Screen) => void }) {
   const { data, derived: d, feasibility } = useStore();
   const sym = data.settings.currencySymbol;
+  const [dismissed, setDismissed] = useState<Set<string>>(loadDismissed);
+
+  const dismiss = (id: string) => {
+    const next = new Set(dismissed);
+    next.add(id);
+    setDismissed(next);
+    localStorage.setItem(DISMISS_KEY, JSON.stringify([...next]));
+  };
+
+  // Calm one-liners for claims whose expected date has passed. Dismissible.
+  const now = Date.now();
+  const overdueReceivables = data.receivables.filter(
+    (r) =>
+      r.status === "active" &&
+      r.expectedDate &&
+      parseISO(r.expectedDate).getTime() < now &&
+      !dismissed.has(r.id)
+  );
 
   const weekEnd = addDays(startOfWeek(new Date()), 7);
   const daysLeft = Math.max(
@@ -50,6 +79,11 @@ export function Console({ go }: { go: (s: Screen) => void }) {
         <div>
           <div className="label mb8">Net worth</div>
           <TickerNumber value={d.netWorth} symbol={sym} />
+          {d.netWorthIfAllRepaid - d.netWorth >= 1 && (
+            <div className="status-line mt8 faint">
+              {fmt(d.netWorthIfAllRepaid, sym)} if all debts repaid
+            </div>
+          )}
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="label mb8">Liquid</div>
@@ -67,6 +101,24 @@ export function Console({ go }: { go: (s: Screen) => void }) {
           a heartbeat; your Regular is untouched.
         </div>
       )}
+
+      {overdueReceivables.map((r) => {
+        const days = Math.round((now - parseISO(r.expectedDate!).getTime()) / DAY_MS);
+        const when =
+          days <= 0 ? "today" : days < 14 ? `${plural(days, "day")} ago` : `on ${fmtDate(r.expectedDate!)}`;
+        return (
+          <div className="notice mb16" key={r.id}>
+            <div className="row">
+              <span>
+                {r.person}'s {fmt(d.receivableOutstanding[r.id] ?? r.amount, sym)} was expected {when}.
+              </span>
+              <button className="linklike" onClick={() => dismiss(r.id)}>
+                dismiss
+              </button>
+            </div>
+          </div>
+        );
+      })}
 
       {/* the three feelings */}
       <div className="grid3">
@@ -155,6 +207,7 @@ export function Console({ go }: { go: (s: Screen) => void }) {
               color: "#5c636d",
             },
             { label: "Outside assets", value: d.assetsTotal, color: "#8465c9" },
+            { label: "Receivables (weighted)", value: d.receivablesWeighted, color: "#c98a5b" },
           ]}
         />
       </div>

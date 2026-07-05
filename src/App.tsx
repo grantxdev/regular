@@ -1,9 +1,10 @@
 /** App shell — login gate (when cloud sync is configured), left rail + screen. */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Screen } from "./types";
 import { cloudEnabled, useStore } from "./store";
 import { Login } from "./components/Login";
+import { Onboarding, hasOnboarded } from "./components/Onboarding";
 import { Console } from "./components/Console";
 import { MoneyIn } from "./components/MoneyIn";
 import { Goals } from "./components/Goals";
@@ -25,9 +26,21 @@ const NAV: { id: Screen; label: string; hint: string }[] = [
 export default function App() {
   const [screen, setScreen] = useState<Screen>("console");
   const [offline, setOffline] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const { derived, isSeeded, cloudStatus } = useStore();
 
-  if (cloudEnabled && cloudStatus === "signedOut" && !offline) {
+  const gated = cloudEnabled && cloudStatus === "signedOut" && !offline;
+
+  // First arrival (signed in, or chose offline) sees the tour once. Rules can
+  // replay it by dispatching the "regular:show-tour" event.
+  useEffect(() => {
+    if (!gated && !hasOnboarded()) setShowTour(true);
+    const replay = () => setShowTour(true);
+    window.addEventListener("regular:show-tour", replay);
+    return () => window.removeEventListener("regular:show-tour", replay);
+  }, [gated]);
+
+  if (gated) {
     return <Login onOffline={() => setOffline(true)} />;
   }
 
@@ -44,6 +57,7 @@ export default function App() {
 
   return (
     <div className="shell">
+      {showTour && <Onboarding onDone={() => setShowTour(false)} />}
       <aside className="rail">
         <div className="rail-brand">
           <div className="wordmark">REGULAR</div>

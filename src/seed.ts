@@ -9,7 +9,9 @@ import { emptyData } from "./types";
 import {
   addAsset,
   addGoal,
+  addReceivable,
   adjust,
+  lendMoney,
   logIncome,
   logSpend,
   payProvision,
@@ -30,11 +32,13 @@ export function buildSeedData(now: Date = new Date()): AppData {
     return d;
   };
 
-  /* Opening: move existing cash into the reserve, on the record. */
+  /* Opening: move existing cash into the reserve, on the record.
+   * Sized so the deep reserve sits comfortably above the Floor, leaving room
+   * to demonstrate lending from it. */
   adjust(
     data,
     "reserve",
-    6000,
+    10000,
     "Opening balance — moved existing savings into Regular",
     undefined,
     at(0, 9)
@@ -135,6 +139,43 @@ export function buildSeedData(now: Date = new Date()): AppData {
 
   /* One "life happens" moment through the accessible door. */
   withdrawAccessible(data, 180, "Phone screen repair", at(75, 16));
+
+  /* Receivables — money owed to me, at varying confidence.
+   * "Dayo" is expected in the past so the Console's calm overdue line shows. */
+  addReceivable(
+    data,
+    {
+      person: "Dayo",
+      amount: 500,
+      expectedDate: toISODate(addDays(now, -6)),
+      note: "Covered his flight, said he'd send it back",
+      confidence: "hopeful",
+    },
+    at(40)
+  );
+  addReceivable(
+    data,
+    {
+      person: "Sister",
+      amount: 1200,
+      expectedDate: toISODate(addMonths(now, 2)),
+      note: "Helped with her deposit",
+      confidence: "likely",
+    },
+    at(60)
+  );
+  /* A small deliberate loan from the accessible reserve (immediate, no cooldown). */
+  lendMoney(
+    data,
+    {
+      person: "Tobi",
+      amount: 300,
+      layer: "accessible",
+      confidence: "certain",
+      reason: "Bridge until his payday",
+    },
+    at(112, 15)
+  );
 
   /* A little spend-game activity this week (optional, never homework). */
   const daysIn = 130;

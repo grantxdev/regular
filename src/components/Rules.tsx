@@ -193,6 +193,21 @@ export function Rules() {
             {num("vehicleDepreciationRate", { step: "0.01", max: 1 })}
           </div>
           <div className="field">
+            <span className="label">Receivable weight — certain (0–1)</span>
+            {num("receivableWeightCertain", { step: "0.05", max: 1 })}
+            <span className="field-hint">
+              How much of a claim counts toward net worth, by confidence.
+            </span>
+          </div>
+          <div className="field">
+            <span className="label">Receivable weight — likely (0–1)</span>
+            {num("receivableWeightLikely", { step: "0.05", max: 1 })}
+          </div>
+          <div className="field">
+            <span className="label">Receivable weight — hopeful (0–1)</span>
+            {num("receivableWeightHopeful", { step: "0.05", max: 1 })}
+          </div>
+          <div className="field">
             <span className="label">Currency symbol</span>
             <input
               className="input"
@@ -305,6 +320,12 @@ export function Rules() {
           Everything lives in this browser's storage. Export regularly; the
           file restores you completely.
         </div>
+        <button
+          className="btn btn-quiet mt16"
+          onClick={() => window.dispatchEvent(new Event("regular:show-tour"))}
+        >
+          Replay the welcome tour
+        </button>
       </div>
 
       {adjusting && <AdjustDialog onClose={() => setAdjusting(false)} />}

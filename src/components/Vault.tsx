@@ -43,7 +43,12 @@ export function Vault() {
           <div className="notice mb16" key={p.id}>
             <div className="row">
               <span>
-                Pending deep withdrawal: <span className="num">{fmtExact(p.amount, sym)}</span>
+                {p.lend ? (
+                  <>Pending loan to {p.lend.person}: </>
+                ) : (
+                  <>Pending deep withdrawal: </>
+                )}
+                <span className="num">{fmtExact(p.amount, sym)}</span>
                 {" — "}
                 <span className="dim">"{p.reason}"</span>
                 <br />
@@ -51,6 +56,7 @@ export function Vault() {
                   {ready
                     ? "Cooldown complete. Confirm or cancel."
                     : `Confirmable after ${new Date(p.confirmAfter).toLocaleString()}. Reversible until then.`}
+                  {p.lend && " On confirm, the cash becomes a receivable — net worth unchanged."}
                 </span>
               </span>
               <span style={{ display: "flex", gap: 8, flexShrink: 0 }}>
