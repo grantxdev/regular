@@ -50,8 +50,13 @@ export function Ledger() {
           break;
         case "withdrawal":
           out.push({
-            key: e.id, date, kind: `withdrawal · ${e.layer}`,
-            detail: `"${e.reason}"${e.goalName ? ` — ${e.goalName}` : ""}`,
+            key: e.id, date,
+            kind: e.allowance ? "allowance" : `withdrawal · ${e.layer}`,
+            detail: e.allowance
+              ? `Weekly allowance${e.weekOf ? ` · week of ${fmtDate(e.weekOf)}` : ""}`
+              : e.category
+                ? `${e.category}${e.reason ? ` — ${e.reason}` : ""}`
+                : `"${e.reason}"${e.goalName ? ` — ${e.goalName}` : ""}`,
             amount: -e.amount,
           });
           break;
@@ -107,6 +112,20 @@ export function Ledger() {
             key: e.id, date, kind: "write-off",
             detail: `${e.person}'s ${fmtExact(e.amount, sym)} — "${e.reason}"`,
             amount: null,
+          });
+          break;
+        case "debt_added":
+          out.push({
+            key: e.id, date, kind: "debt recorded",
+            detail: `${e.name} — owed ${fmtExact(e.amount, sym)}`,
+            amount: null,
+          });
+          break;
+        case "debt_payment":
+          out.push({
+            key: e.id, date, kind: `debt payment · ${e.layer}`,
+            detail: e.name,
+            amount: -e.amount,
           });
           break;
       }

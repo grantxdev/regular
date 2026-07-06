@@ -5,7 +5,7 @@
  */
 
 import type { AppData } from "./types";
-import { DEFAULT_SETTINGS } from "./types";
+import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from "./types";
 
 const KEY = "regular-data-v1";
 
@@ -24,7 +24,9 @@ export const localStorageBackend: Storage = {
       // Backfill anything added after the document was first written.
       parsed.settings = { ...DEFAULT_SETTINGS, ...parsed.settings };
       parsed.receivables ??= [];
+      parsed.debts ??= [];
       parsed.pendingWithdrawals ??= [];
+      if (!parsed.withdrawalCategories?.length) parsed.withdrawalCategories = [...DEFAULT_CATEGORIES];
       return parsed;
     } catch {
       return null;
@@ -50,8 +52,10 @@ export function validateImport(raw: string): AppData {
   }
   parsed.settings = { ...DEFAULT_SETTINGS, ...parsed.settings };
   parsed.receivables ??= [];
+  parsed.debts ??= [];
   parsed.pendingWithdrawals ??= [];
   parsed.incomeSources ??= [];
+  if (!parsed.withdrawalCategories?.length) parsed.withdrawalCategories = [...DEFAULT_CATEGORIES];
   return parsed as AppData;
 }
 

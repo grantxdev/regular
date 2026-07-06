@@ -10,6 +10,7 @@ import { MoneyIn } from "./components/MoneyIn";
 import { Goals } from "./components/Goals";
 import { Vault } from "./components/Vault";
 import { Assets } from "./components/Assets";
+import { Reports } from "./components/Reports";
 import { Ledger } from "./components/Ledger";
 import { Rules } from "./components/Rules";
 
@@ -19,6 +20,7 @@ const NAV: { id: Screen; label: string; hint: string }[] = [
   { id: "goals", label: "Goals", hint: "Objectives" },
   { id: "vault", label: "Vault", hint: "Reserves" },
   { id: "assets", label: "Assets", hint: "Holdings" },
+  { id: "reports", label: "Reports", hint: "Performance" },
   { id: "ledger", label: "Ledger", hint: "Statement" },
   { id: "rules", label: "Rules", hint: "Instructions" },
 ];
@@ -95,6 +97,7 @@ export default function App() {
         {screen === "goals" && <Goals />}
         {screen === "vault" && <Vault />}
         {screen === "assets" && <Assets />}
+        {screen === "reports" && <Reports />}
         {screen === "ledger" && <Ledger />}
         {screen === "rules" && <Rules />}
       </main>

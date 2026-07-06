@@ -13,8 +13,23 @@ export type Screen =
   | "goals"
   | "vault"
   | "assets"
+  | "reports"
   | "ledger"
   | "rules";
+
+/** Prefilled spending categories for accessible withdrawals (not free-text). */
+export const DEFAULT_CATEGORIES = [
+  "Rent / housing",
+  "Bills & utilities",
+  "Groceries",
+  "Eating out",
+  "Transport",
+  "Family",
+  "Health",
+  "Shopping",
+  "Gifts",
+  "Other",
+];
 
 /* ------------------------------------------------------------------ */
 /* Settings — "these are your laws"                                    */
@@ -125,6 +140,23 @@ export interface Receivable {
 export type LendLayer = "accessible" | "deep" | "surplus" | "regular" | "goal";
 
 /* ------------------------------------------------------------------ */
+/* Debts — money I owe. A liability: it reduces net worth until paid.   */
+/* ------------------------------------------------------------------ */
+
+export interface Debt {
+  id: string;
+  /** Who / what it's for. */
+  name: string;
+  /** Total amount owed. Outstanding is derived from the ledger. */
+  amount: number;
+  /** Optional date it's due by, ISO yyyy-mm-dd. */
+  dueDate: string | null;
+  note: string;
+  status: "active" | "paid";
+  createdAt: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* The Split — computed at income time, stored as fact on the event    */
 /* ------------------------------------------------------------------ */
 
@@ -180,7 +212,14 @@ export interface WithdrawalEvent extends BaseEvent {
   layer: WithdrawLayer;
   goalId?: string;
   goalName?: string;
+  /** For accessible withdrawals this doubles as the "what's it for" category. */
   reason: string;
+  /** True when this is a "take this week's allowance" draw from the accessible reserve. */
+  allowance?: boolean;
+  /** For allowance draws: ISO date of the Monday of the week it covers. */
+  weekOf?: string;
+  /** For accessible withdrawals: the chosen spending category. */
+  category?: string;
 }
 
 export interface ProvisionPaidEvent extends BaseEvent {
@@ -259,6 +298,26 @@ export interface ReceivableWriteoffEvent extends BaseEvent {
   reason: string;
 }
 
+/* ---- debts (money I owe) ---- */
+
+/** A debt recorded: a liability appears, net worth drops by the amount. */
+export interface DebtAddedEvent extends BaseEvent {
+  type: "debt_added";
+  debtId: string;
+  name: string;
+  amount: number;
+}
+
+/** A payment toward a debt: cash leaves a layer and the debt shrinks. */
+export interface DebtPaymentEvent extends BaseEvent {
+  type: "debt_payment";
+  debtId: string;
+  name: string;
+  amount: number;
+  /** Where the cash came from. */
+  layer: "accessible" | "surplus";
+}
+
 export type LedgerEvent =
   | IncomeEvent
   | SpendEvent
@@ -270,7 +329,9 @@ export type LedgerEvent =
   | ReceivableAddedEvent
   | LendEvent
   | ReceivableRepaidEvent
-  | ReceivableWriteoffEvent;
+  | ReceivableWriteoffEvent
+  | DebtAddedEvent
+  | DebtPaymentEvent;
 
 /* ------------------------------------------------------------------ */
 /* Deep-reserve withdrawals wait 24h here before becoming events        */
@@ -302,10 +363,13 @@ export interface AppData {
   goals: Goal[];
   assets: Asset[];
   receivables: Receivable[];
+  debts: Debt[];
   events: LedgerEvent[];
   pendingWithdrawals: PendingWithdrawal[];
   /** Saved, reusable income source labels. */
   incomeSources: string[];
+  /** Saved, reusable "what's it for" categories for accessible withdrawals. */
+  withdrawalCategories: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -337,8 +401,10 @@ export function emptyData(settings?: Settings): AppData {
     goals: [],
     assets: [],
     receivables: [],
+    debts: [],
     events: [],
     pendingWithdrawals: [],
     incomeSources: [],
+    withdrawalCategories: [...DEFAULT_CATEGORIES],
   };
 }

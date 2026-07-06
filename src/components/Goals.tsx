@@ -6,9 +6,9 @@
 
 import { useState } from "react";
 import { useStore } from "../store";
-import type { Goal, GoalKind, Recurrence } from "../types";
+import type { Debt, Goal, GoalKind, Recurrence } from "../types";
 import { daysUntilDue } from "../engine/feasibility";
-import { fmt, fmtDate, fmtMonth, plural, toISODate, addMonths } from "../lib/util";
+import { fmt, fmtExact, fmtDate, fmtMonth, plural, toISODate, addMonths, parseISO, DAY_MS } from "../lib/util";
 import { Modal } from "./shared";
 
 export function Goals() {
@@ -16,6 +16,12 @@ export function Goals() {
   const sym = data.settings.currencySymbol;
   const [adding, setAdding] = useState<GoalKind | null>(null);
   const [editing, setEditing] = useState<Goal | null>(null);
+  const [addingDebt, setAddingDebt] = useState(false);
+  const [payingDebt, setPayingDebt] = useState<Debt | null>(null);
+
+  const activeDebts = data.debts
+    .filter((x) => x.status === "active")
+    .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
 
   const provisions = data.goals
     .filter((g) => g.status === "active" && g.kind === "provision")
@@ -178,6 +184,57 @@ export function Goals() {
         );
       })}
 
+      {/* -------- debts (money I owe) -------- */}
+      <div className="row mb16 mt24">
+        <div>
+          <h2>Debts</h2>
+          <div className="status-line faint">Money you owe. A liability, until paid.</div>
+        </div>
+        <button className="btn" onClick={() => setAddingDebt(true)}>
+          Add debt
+        </button>
+      </div>
+
+      {activeDebts.length === 0 && (
+        <div className="card status-line">Nothing requires your attention.</div>
+      )}
+
+      {activeDebts.map((x) => {
+        const outstanding = d.debtOutstanding[x.id] ?? x.amount;
+        const paid = x.amount - outstanding;
+        const days = x.dueDate
+          ? Math.ceil((parseISO(x.dueDate).getTime() - Date.now()) / DAY_MS)
+          : null;
+        return (
+          <div className="card" key={x.id}>
+            <div className="row">
+              <h2>{x.name}</h2>
+              <span className="status-line">
+                {x.dueDate == null ? (
+                  <span className="faint">no date</span>
+                ) : days! < 0 ? (
+                  <span className="amber">Due {fmtDate(x.dueDate)}. Overdue.</span>
+                ) : (
+                  <>Due {fmtDate(x.dueDate)}{days! <= 30 ? ` · ${plural(days!, "day")}` : ""}</>
+                )}
+              </span>
+            </div>
+            <div className="meter mt16 warn">
+              <div style={{ width: `${Math.min(100, (paid / Math.max(x.amount, 1)) * 100)}%` }} />
+            </div>
+            <div className="row mt8">
+              <span className="status-line">
+                {fmt(outstanding, sym)} left of {fmt(x.amount, sym)}
+                {x.note ? ` · ${x.note}` : ""}
+              </span>
+              <button className="btn" onClick={() => setPayingDebt(x)}>
+                Pay
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
       {adding && (
         <GoalForm
           kind={adding}
@@ -188,6 +245,8 @@ export function Goals() {
           }}
         />
       )}
+      {addingDebt && <DebtForm onClose={() => setAddingDebt(false)} />}
+      {payingDebt && <PayDebtModal debt={payingDebt} onClose={() => setPayingDebt(null)} />}
       {editing && (
         <GoalForm
           kind={editing.kind}
@@ -342,6 +401,130 @@ function GoalForm({
             Archive
           </button>
         )}
+      </div>
+    </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Debts — add + pay down                                              */
+/* ------------------------------------------------------------------ */
+
+function DebtForm({ onClose }: { onClose: () => void }) {
+  const { apply, actions } = useStore();
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState("");
+  const [note, setNote] = useState("");
+  const a = parseFloat(amount);
+  const valid = name.trim().length > 0 && !isNaN(a) && a > 0;
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="mb8">Record a debt</h2>
+      <div className="notice mb16">
+        Money you owe. It lowers your net worth by what's outstanding until you
+        pay it down.
+      </div>
+      <div className="field">
+        <span className="label">Who / what it's for</span>
+        <input className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="form-row">
+        <div className="field">
+          <span className="label">Amount owed</span>
+          <input
+            className="input"
+            type="number"
+            min="0"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <span className="label">Due by (optional)</span>
+          <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="field">
+        <span className="label">Note (optional)</span>
+        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          className="btn btn-primary"
+          disabled={!valid}
+          onClick={() => {
+            apply((draft) =>
+              actions.addDebt(draft, { name: name.trim(), amount: a, dueDate: date || null, note })
+            );
+            onClose();
+          }}
+        >
+          Record
+        </button>
+        <button className="btn btn-quiet" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function PayDebtModal({ debt, onClose }: { debt: Debt; onClose: () => void }) {
+  const { data, derived: d, apply, actions } = useStore();
+  const sym = data.settings.currencySymbol;
+  const outstanding = d.debtOutstanding[debt.id] ?? debt.amount;
+  const [amount, setAmount] = useState(String(Math.round(Math.min(outstanding, d.accessible))));
+  const [layer, setLayer] = useState<"accessible" | "surplus">("accessible");
+  const [error, setError] = useState<string | null>(null);
+
+  const available = layer === "surplus" ? d.surplusHeld : d.accessible;
+  const v = parseFloat(amount);
+  const valid = !isNaN(v) && v > 0 && v <= available + 0.005;
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="mb8">Pay {debt.name}</h2>
+      <div className="status-line mb16">
+        {fmtExact(outstanding, sym)} outstanding. Paid from your {layer} reserve.
+      </div>
+      <div className="field">
+        <span className="label">Pay from</span>
+        <select className="select" value={layer} onChange={(e) => setLayer(e.target.value as "accessible" | "surplus")}>
+          <option value="accessible">Accessible reserve ({fmt(d.accessible, sym)})</option>
+          <option value="surplus">Unassigned surplus ({fmt(d.surplusHeld, sym)})</option>
+        </select>
+      </div>
+      <div className="field">
+        <span className="label">Amount (max {fmtExact(available, sym)})</span>
+        <input
+          className="input"
+          type="number"
+          min="0"
+          step="0.01"
+          value={amount}
+          autoFocus
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <span className="field-hint">Partial payments reduce what's owed.</span>
+      </div>
+      {error && <div className="notice block mb16">{error}</div>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          className="btn btn-primary"
+          disabled={!valid}
+          onClick={() => {
+            const err = apply((draft) => actions.payDebt(draft, debt.id, v, layer)) as string | null;
+            if (err) setError(err);
+            else onClose();
+          }}
+        >
+          Pay
+        </button>
+        <button className="btn btn-quiet" onClick={onClose}>
+          Cancel
+        </button>
       </div>
     </Modal>
   );

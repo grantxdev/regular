@@ -8,10 +8,12 @@ import type { Screen } from "../types";
 import { useStore } from "../store";
 import { fmt, fmtDate, fmtMonth, plural, parseISO, DAY_MS } from "../lib/util";
 import {
-  AllocationRing,
+  AllocationBar,
+  Modal,
   NetWorthChart,
   TickerNumber,
 } from "./shared";
+import { AccessibleWithdrawModal, TakeAllowanceModal } from "./CashActions";
 
 /** Overdue receivable notices dismiss permanently — a claim is never a nag. */
 const DISMISS_KEY = "regular-dismissed-overdue-v1";
@@ -24,9 +26,12 @@ function loadDismissed(): Set<string> {
 }
 
 export function Console({ go }: { go: (s: Screen) => void }) {
-  const { data, derived: d, feasibility } = useStore();
+  const { data, derived: d, feasibility, apply, actions } = useStore();
   const sym = data.settings.currencySymbol;
   const [dismissed, setDismissed] = useState<Set<string>>(loadDismissed);
+  const [takeAllowance, setTakeAllowance] = useState(false);
+  const [withdrawAccessible, setWithdrawAccessible] = useState(false);
+  const [moneyOut, setMoneyOut] = useState(false);
 
   const dismiss = (id: string) => {
     const next = new Set(dismissed);
@@ -73,11 +78,32 @@ export function Console({ go }: { go: (s: Screen) => void }) {
               {fmt(d.netWorthIfAllRepaid, sym)} if all debts repaid
             </div>
           )}
+          <div className="status-line mt8">
+            <span className="green">{fmt(data.settings.regularWeekly, sym)}</span>
+            <span className="faint"> weekly allowance</span>
+            <span className="faint"> · </span>
+            {fmt(d.accessibleIfNeeded, sym)}
+            <span className="faint"> accessible if needed</span>
+          </div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="label mb8">Liquid</div>
           <div className="big-num dim">{fmt(d.liquidWorth, sym)}</div>
         </div>
+      </div>
+
+      {/* primary actions */}
+      <div className="mt16" style={{ display: "flex", gap: 12 }}>
+        <button className="btn btn-primary" onClick={() => go("money-in")}>
+          Money in
+        </button>
+        <button
+          className="btn"
+          disabled={d.accessible <= 0}
+          onClick={() => setMoneyOut(true)}
+        >
+          Money out
+        </button>
       </div>
 
       <div className="mt16 mb16">
@@ -113,59 +139,33 @@ export function Console({ go }: { go: (s: Screen) => void }) {
         );
       })}
 
-      {/* the three liquidity positions — numbers, little else */}
-      <div className="grid3">
-        <div className="card">
-          <div className="label mb8">Available today</div>
-          <div className="big-num green">{fmt(d.availableToday, sym)}</div>
-        </div>
-        <div className="card">
-          <div className="label mb8">Accessible if needed</div>
-          <div className="big-num">{fmt(d.accessibleIfNeeded, sym)}</div>
-        </div>
-        <div className="card">
-          <div className="label mb8">Protected</div>
-          <div className="big-num">{fmt(d.protectedTotal, sym)}</div>
-        </div>
-      </div>
-
-      {/* week + reserve status */}
-      <div className="grid2 mt16">
-        <div className="card">
-          <div className="label mb8">Allowance</div>
-          <div className="big-num">
-            {fmt(data.settings.regularWeekly, sym)}
-            <span className="dim" style={{ fontSize: "0.85rem", fontWeight: 400 }}> / week</span>
-          </div>
-          <div className="status-line mt8">
-            {fmt((data.settings.regularWeekly * 52) / 12, sym)} / month.
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="label mb8">Reserve</div>
-          <div className="big-num">
-            {d.runwayMonths.toFixed(1)}
-            <span className="dim" style={{ fontSize: "0.85rem", fontWeight: 400 }}> months</span>
-          </div>
-          <div className="meter mt8">
-            <div
-              style={{
-                width: `${Math.min(100, (d.reserve / Math.max(d.reserveTarget, 1)) * 100)}%`,
-              }}
-            />
-          </div>
-          <div className="status-line mt8">
+      {/* reserve gauge — red when low, green when full */}
+      <div className="card mt16">
+        <div className="row">
+          <span className="label">Reserve</span>
+          <span className="status-line">
             {reserveWord}
-            <span className="faint"> {fmt(d.reserve, sym)} of {fmt(d.reserveTarget, sym)}.</span>
-          </div>
+            <span className="faint"> {fmt(d.reserve, sym)} of {fmt(d.reserveTarget, sym)}</span>
+          </span>
+        </div>
+        <div className="big-num mt8">
+          {d.runwayMonths.toFixed(1)}
+          <span className="dim" style={{ fontSize: "0.85rem", fontWeight: 400 }}> months</span>
+        </div>
+        <div className="gauge mt16">
+          <div
+            className="gauge-cover"
+            style={{
+              width: `${100 - Math.min(100, (d.reserve / Math.max(d.reserveTarget, 1)) * 100)}%`,
+            }}
+          />
         </div>
       </div>
 
-      {/* allocation ring */}
+      {/* allocation — one horizontal bar, hover to read */}
       <div className="card mt16">
         <div className="label mb16">Allocation</div>
-        <AllocationRing
+        <AllocationBar
           symbol={sym}
           slices={[
             { label: "Reserve", value: d.reserve, color: "var(--accent)" },
@@ -230,14 +230,42 @@ export function Console({ go }: { go: (s: Screen) => void }) {
         )}
       </div>
 
-      <div className="mt24" style={{ display: "flex", gap: 12 }}>
-        <button className="btn btn-primary btn-big" onClick={() => go("money-in")}>
-          Money in
-        </button>
-        <button className="btn btn-big" onClick={() => go("vault")}>
-          Vault
-        </button>
-      </div>
+      {moneyOut && (
+        <Modal onClose={() => setMoneyOut(false)}>
+          <h2 className="mb8">Money out</h2>
+          <div className="status-line mb16">
+            {fmt(d.accessibleIfNeeded, sym)} accessible.
+          </div>
+          <div className="stack" style={{ gap: 10 }}>
+            <button
+              className="btn btn-big"
+              onClick={() => {
+                setMoneyOut(false);
+                setTakeAllowance(true);
+              }}
+            >
+              Take weekly allowance
+            </button>
+            <button
+              className="btn btn-big"
+              disabled={d.accessible <= 0}
+              onClick={() => {
+                setMoneyOut(false);
+                setWithdrawAccessible(true);
+              }}
+            >
+              Withdraw from accessible
+            </button>
+          </div>
+          <button className="btn btn-quiet mt16" onClick={() => setMoneyOut(false)}>
+            Cancel
+          </button>
+        </Modal>
+      )}
+      {takeAllowance && <TakeAllowanceModal onClose={() => setTakeAllowance(false)} />}
+      {withdrawAccessible && (
+        <AccessibleWithdrawModal onClose={() => setWithdrawAccessible(false)} />
+      )}
     </div>
   );
 }

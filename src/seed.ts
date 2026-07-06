@@ -8,17 +8,20 @@ import type { AppData } from "./types";
 import { emptyData } from "./types";
 import {
   addAsset,
+  addDebt,
   addGoal,
   addReceivable,
   adjust,
   lendMoney,
   logIncome,
   logSpend,
+  payDebt,
   payProvision,
+  takeWeeklyAllowance,
   withdrawAccessible,
 } from "./engine/actions";
 import { deriveState } from "./engine/replay";
-import { addDays, addMonths, toISODate } from "./lib/util";
+import { addDays, addMonths, startOfWeek, toISODate } from "./lib/util";
 
 export function buildSeedData(now: Date = new Date()): AppData {
   const data = emptyData();
@@ -138,7 +141,7 @@ export function buildSeedData(now: Date = new Date()): AppData {
   }
 
   /* One "life happens" moment through the accessible door. */
-  withdrawAccessible(data, 180, "Phone screen repair", at(75, 16));
+  withdrawAccessible(data, 180, "Health", "Phone screen repair", at(75, 16));
 
   /* Receivables — money owed to me, at varying confidence.
    * "Dayo" is expected in the past so the Console's calm overdue line shows. */
@@ -177,11 +180,27 @@ export function buildSeedData(now: Date = new Date()): AppData {
     at(112, 15)
   );
 
-  /* A little spend-game activity this week (optional, never homework). */
-  const daysIn = 130;
-  logSpend(data, 42.5, at(daysIn - 2, 13));
-  logSpend(data, 18, at(daysIn - 1, 19));
-  logSpend(data, 26.75, at(daysIn, 9));
+  /* A described withdrawal from the accessible reserve. */
+  withdrawAccessible(data, 150, "Family", "Monthly to sister", at(121, 11));
+
+  /* A debt owed, with a due date, partly paid down. */
+  const laptop = addDebt(
+    data,
+    {
+      name: "Laptop financing",
+      amount: 1200,
+      dueDate: toISODate(addMonths(now, 3)),
+      note: "0% plan, 4 payments left",
+    },
+    at(90)
+  );
+  payDebt(data, laptop.id, 300, "accessible", at(118, 14));
+
+  /* Weekly allowance taken for the two most recent past weeks — seeds the
+   * tracker so recent weeks read as taken. */
+  const thisMonday = startOfWeek(now);
+  takeWeeklyAllowance(data, toISODate(addDays(thisMonday, -7)), addDays(now, -4));
+  takeWeeklyAllowance(data, toISODate(addDays(thisMonday, -14)), addDays(now, -11));
 
   return data;
 }

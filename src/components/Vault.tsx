@@ -10,13 +10,16 @@ import { useStore } from "../store";
 import { floorOf } from "../engine/replay";
 import { fmt, fmtExact, fmtDate, parseISO, r2 } from "../lib/util";
 import { Modal } from "./shared";
+import { AccessibleWithdrawModal, TakeAllowanceModal } from "./CashActions";
 
 export function Vault() {
   const { data, derived: d, apply, actions } = useStore();
   const sym = data.settings.currencySymbol;
   const s = data.settings;
 
-  const [door, setDoor] = useState<"accessible" | "deep" | "surplus" | null>(null);
+  const [door, setDoor] = useState<"deep" | "surplus" | null>(null);
+  const [accessibleOut, setAccessibleOut] = useState(false);
+  const [takeAllowance, setTakeAllowance] = useState(false);
 
   const floor = floorOf(s);
   const pendingTotal = data.pendingWithdrawals.reduce((t, p) => t + p.amount, 0);
@@ -119,12 +122,18 @@ export function Vault() {
           </div>
           <div className="big-num mt8">{fmt(d.accessible, sym)}</div>
           <div className="status-line mt8">
-            {s.accessibleMonths} month{s.accessibleMonths === 1 ? "" : "s"} of
-            expenses. Replenished from future income.
+            Up to {s.accessibleMonths} month{s.accessibleMonths === 1 ? "" : "s"} of
+            expenses. Your weekly allowance and everyday withdrawals draw from
+            here; income replenishes it.
           </div>
-          <button className="btn mt16" disabled={d.accessible <= 0} onClick={() => setDoor("accessible")}>
-            Withdraw
-          </button>
+          <div className="mt16" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn" onClick={() => setTakeAllowance(true)}>
+              Take allowance
+            </button>
+            <button className="btn" disabled={d.accessible <= 0} onClick={() => setAccessibleOut(true)}>
+              Withdraw
+            </button>
+          </div>
         </div>
 
         {/* Layer 4 — Deep reserve */}
@@ -180,6 +189,8 @@ export function Vault() {
       </div>
 
       {door && <WithdrawDialog layer={door} onClose={() => setDoor(null)} />}
+      {accessibleOut && <AccessibleWithdrawModal onClose={() => setAccessibleOut(false)} />}
+      {takeAllowance && <TakeAllowanceModal onClose={() => setTakeAllowance(false)} />}
     </div>
   );
 }
@@ -190,7 +201,7 @@ function WithdrawDialog({
   layer,
   onClose,
 }: {
-  layer: "accessible" | "deep" | "surplus";
+  layer: "deep" | "surplus";
   onClose: () => void;
 }) {
   const { data, derived: d, apply, actions } = useStore();
@@ -203,21 +214,18 @@ function WithdrawDialog({
   const floor = floorOf(s);
   const pendingTotal = data.pendingWithdrawals.reduce((t, p) => t + p.amount, 0);
   const max =
-    layer === "accessible"
-      ? d.accessible
-      : layer === "surplus"
-        ? d.surplusHeld
-        : Math.max(0, r2(d.deep - floor - pendingTotal));
+    layer === "surplus"
+      ? d.surplusHeld
+      : Math.max(0, r2(d.deep - floor - pendingTotal));
 
   const v = parseFloat(amount);
   const amountOk = !isNaN(v) && v > 0 && v <= max + 0.005;
-  // Deep door demands a real typed reason; accessible just wants a short note.
+  // Deep door demands a real typed reason; surplus just wants a short note.
   const reasonOk = layer === "deep" ? reason.trim().length >= 4 : reason.trim().length >= 1;
 
   const newRunway = amountOk ? (d.reserve - v) / Math.max(s.livingExpensesMonthly, 1) : null;
 
   const titles = {
-    accessible: "Accessible reserve",
     deep: "Deep reserve — principal",
     surplus: "Unassigned surplus",
   };
@@ -225,9 +233,7 @@ function WithdrawDialog({
   const submit = () => {
     if (!amountOk || !reasonOk) return;
     let err: string | null = null;
-    if (layer === "accessible") {
-      err = apply((draft) => actions.withdrawAccessible(draft, v, reason.trim())) as string | null;
-    } else if (layer === "surplus") {
+    if (layer === "surplus") {
       err = apply((draft) => actions.withdrawSurplus(draft, v, reason.trim())) as string | null;
     } else {
       err = apply((draft) => actions.requestDeepWithdrawal(draft, v, reason.trim())) as string | null;
@@ -268,11 +274,6 @@ function WithdrawDialog({
           {Math.max(0, newRunway).toFixed(1)} months. Confirm tomorrow.
           Reversible until then. Reserves engage on confirmation; your allowance
           is unaffected.
-        </div>
-      )}
-      {layer === "accessible" && amountOk && (
-        <div className="notice mb16">
-          Replenished from future income.
         </div>
       )}
       {error && <div className="notice block mb16">{error}</div>}

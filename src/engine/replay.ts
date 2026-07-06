@@ -58,6 +58,10 @@ export interface Derived {
   receivablesFullValue: number; // outstanding of active receivables, no haircut
   receivablesWeighted: number; // confidence-weighted contribution to net worth
 
+  /* debts — liabilities that reduce net worth until paid */
+  debtOutstanding: Record<string, number>;
+  debtsTotal: number;
+
   /* rollups */
   cashTotal: number;
   assetsTotal: number;
@@ -116,23 +120,45 @@ export function topGoal(goals: Goal[]): Goal | undefined {
 }
 
 interface Buckets {
-  reserve: number;
+  /** The reserve is two real buckets so draws on the accessible layer stick
+   *  rather than silently refilling from the deep reserve. Total reserve is
+   *  acc + deep. Income fills the accessible layer to its cap first, then deep. */
+  acc: number;
+  deep: number;
   regular: number;
   surplus: number;
   given: number;
   goals: Record<string, number>;
   /** Outstanding principal per receivable id. */
   recv: Record<string, number>;
+  /** Outstanding owed per debt id (a liability). */
+  debt: Record<string, number>;
   recovery: boolean;
 }
 
-/** Apply one ledger event to running balances. Shared by replay + snapshots. */
-function applyEvent(b: Buckets, e: LedgerEvent): void {
+/** Add to the reserve: top up the accessible layer to its cap, overflow to deep. */
+function addToReserve(b: Buckets, amount: number, cap: number): void {
+  const room = Math.max(0, cap - b.acc);
+  const toAcc = Math.min(amount, room);
+  b.acc = r2(b.acc + toAcc);
+  b.deep = r2(b.deep + (amount - toAcc));
+}
+
+/** Remove from the reserve (negative adjustment): draw the deep layer first. */
+function removeFromReserve(b: Buckets, amount: number): void {
+  const fromDeep = Math.min(amount, b.deep);
+  b.deep = r2(b.deep - fromDeep);
+  b.acc = r2(clampMin0(b.acc - (amount - fromDeep)));
+}
+
+/** Apply one ledger event to running balances. Shared by replay + snapshots.
+ *  `cap` is the accessible-reserve ceiling (accessibleMonths × expenses). */
+function applyEvent(b: Buckets, e: LedgerEvent, cap: number): void {
   switch (e.type) {
     case "income": {
       const s = e.split;
       b.given = r2(b.given + s.giving);
-      b.reserve = r2(b.reserve + s.reserve);
+      addToReserve(b, s.reserve, cap);
       b.regular = r2(b.regular + s.regular);
       for (const a of s.goals) {
         b.goals[a.goalId] = r2((b.goals[a.goalId] ?? 0) + a.amount);
@@ -141,7 +167,7 @@ function applyEvent(b: Buckets, e: LedgerEvent): void {
         if (s.surplusTarget === "top_goal" && s.surplusGoalId) {
           b.goals[s.surplusGoalId] = r2((b.goals[s.surplusGoalId] ?? 0) + s.surplus);
         } else if (s.surplusTarget === "reserve") {
-          b.reserve = r2(b.reserve + s.surplus);
+          addToReserve(b, s.surplus, cap);
         } else {
           b.surplus = r2(b.surplus + s.surplus);
         }
@@ -152,8 +178,12 @@ function applyEvent(b: Buckets, e: LedgerEvent): void {
       b.regular = r2(clampMin0(b.regular - e.amount));
       break;
     case "withdrawal":
-      if (e.layer === "accessible" || e.layer === "deep") {
-        b.reserve = r2(clampMin0(b.reserve - e.amount));
+      // Accessible draws (including "take this week's allowance") reduce the
+      // accessible bucket directly — they do not refill from the deep reserve.
+      if (e.layer === "accessible") {
+        b.acc = r2(clampMin0(b.acc - e.amount));
+      } else if (e.layer === "deep") {
+        b.deep = r2(clampMin0(b.deep - e.amount));
       } else if (e.layer === "surplus") {
         b.surplus = r2(clampMin0(b.surplus - e.amount));
       } else if (e.layer === "goal" && e.goalId) {
@@ -164,8 +194,10 @@ function applyEvent(b: Buckets, e: LedgerEvent): void {
       b.goals[e.goalId] = r2(clampMin0((b.goals[e.goalId] ?? 0) - e.amount));
       break;
     case "adjustment":
-      if (e.target === "reserve") b.reserve = r2(clampMin0(b.reserve + e.amount));
-      else if (e.target === "surplus") b.surplus = r2(clampMin0(b.surplus + e.amount));
+      if (e.target === "reserve") {
+        if (e.amount >= 0) addToReserve(b, e.amount, cap);
+        else removeFromReserve(b, -e.amount);
+      } else if (e.target === "surplus") b.surplus = r2(clampMin0(b.surplus + e.amount));
       else if (e.target === "regular") b.regular = r2(clampMin0(b.regular + e.amount));
       else if (e.target === "goal" && e.goalId)
         b.goals[e.goalId] = r2(clampMin0((b.goals[e.goalId] ?? 0) + e.amount));
@@ -185,8 +217,10 @@ function applyEvent(b: Buckets, e: LedgerEvent): void {
     case "lend": {
       // Cash leaves the chosen layer and becomes a claim. Net worth is flat
       // (at full confidence); liquidity in that layer correctly drops.
-      if (e.layer === "accessible" || e.layer === "deep") {
-        b.reserve = r2(clampMin0(b.reserve - e.amount));
+      if (e.layer === "accessible") {
+        b.acc = r2(clampMin0(b.acc - e.amount));
+      } else if (e.layer === "deep") {
+        b.deep = r2(clampMin0(b.deep - e.amount));
       } else if (e.layer === "surplus") {
         b.surplus = r2(clampMin0(b.surplus - e.amount));
       } else if (e.layer === "regular") {
@@ -201,7 +235,7 @@ function applyEvent(b: Buckets, e: LedgerEvent): void {
       // The money comes home through the standard Split, exactly like income.
       const s = e.split;
       b.given = r2(b.given + s.giving);
-      b.reserve = r2(b.reserve + s.reserve);
+      addToReserve(b, s.reserve, cap);
       b.regular = r2(b.regular + s.regular);
       for (const a of s.goals) {
         b.goals[a.goalId] = r2((b.goals[a.goalId] ?? 0) + a.amount);
@@ -210,7 +244,7 @@ function applyEvent(b: Buckets, e: LedgerEvent): void {
         if (s.surplusTarget === "top_goal" && s.surplusGoalId) {
           b.goals[s.surplusGoalId] = r2((b.goals[s.surplusGoalId] ?? 0) + s.surplus);
         } else if (s.surplusTarget === "reserve") {
-          b.reserve = r2(b.reserve + s.surplus);
+          addToReserve(b, s.surplus, cap);
         } else {
           b.surplus = r2(b.surplus + s.surplus);
         }
@@ -222,6 +256,18 @@ function applyEvent(b: Buckets, e: LedgerEvent): void {
     case "receivable_writeoff":
       // The outstanding claim leaves net worth; it does not touch any cash layer.
       b.recv[e.receivableId] = 0;
+      break;
+
+    /* ---- debts (money I owe) ---- */
+    case "debt_added":
+      // A liability appears; no cash moves, net worth drops by the amount owed.
+      b.debt[e.debtId] = r2((b.debt[e.debtId] ?? 0) + e.amount);
+      break;
+    case "debt_payment":
+      // Cash settles part of the debt: the layer drops and so does what's owed.
+      if (e.layer === "surplus") b.surplus = r2(clampMin0(b.surplus - e.amount));
+      else b.acc = r2(clampMin0(b.acc - e.amount));
+      b.debt[e.debtId] = r2(clampMin0((b.debt[e.debtId] ?? 0) - e.amount));
       break;
   }
 }
@@ -238,14 +284,17 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
   const goalById = new Map(data.goals.map((g) => [g.id, g]));
 
   const b: Buckets = {
-    reserve: 0,
+    acc: 0,
+    deep: 0,
     regular: 0,
     surplus: 0,
     given: 0,
     goals: {},
     recv: {},
+    debt: {},
     recovery: false,
   };
+  const accessibleCap = s.accessibleMonths * s.livingExpensesMonthly;
 
   const recvById = new Map(data.receivables.map((r) => [r.id, r]));
   const sweeps: SweepRecord[] = [];
@@ -265,7 +314,7 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
   const cashOf = (bk: Buckets): number => {
     let goalsSum = 0;
     for (const v of Object.values(bk.goals)) goalsSum += v;
-    return r2(bk.reserve + bk.regular + bk.surplus + goalsSum);
+    return r2(bk.acc + bk.deep + bk.regular + bk.surplus + goalsSum);
   };
 
   /** Confidence-weighted value of live claims — the net-worth contribution. */
@@ -279,10 +328,16 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
     return r2(total);
   };
 
+  const debtOf = (bk: Buckets): number => {
+    let total = 0;
+    for (const v of Object.values(bk.debt)) total += clampMin0(v);
+    return r2(total);
+  };
+
   const snapshot = (at: Date) => {
     history.push({
       date: at.toISOString(),
-      netWorth: r2(cashOf(b) + assetsAt(at) + receivablesWeightedOf(b)),
+      netWorth: r2(cashOf(b) + assetsAt(at) + receivablesWeightedOf(b) - debtOf(b)),
     });
   };
 
@@ -328,7 +383,7 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
 
   for (const e of events) {
     advanceTo(parseISO(e.date));
-    applyEvent(b, e);
+    applyEvent(b, e, accessibleCap);
   }
   advanceTo(now);
   snapshot(now);
@@ -348,8 +403,9 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
 
   const reserveTarget = reserveTargetOf(s);
   const floor = floorOf(s);
-  const accessible = r2(Math.min(b.reserve, s.accessibleMonths * s.livingExpensesMonthly));
-  const deep = r2(b.reserve - accessible);
+  const reserveBal = r2(b.acc + b.deep);
+  const accessible = r2(b.acc);
+  const deep = r2(b.deep);
 
   /* average monthly income over the trailing 90 days (or actual span if shorter) */
   const cutoff = new Date(now.getTime() - 90 * DAY_MS);
@@ -402,8 +458,21 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
   receivablesFullValue = r2(receivablesFullValue);
   receivablesWeighted = r2(receivablesWeighted);
 
+  /* debts — liabilities */
+  const debtById = new Map(data.debts.map((x) => [x.id, x]));
+  const debtOutstanding: Record<string, number> = {};
+  let debtsTotal = 0;
+  for (const [id, owed] of Object.entries(b.debt)) {
+    const dref = debtById.get(id);
+    const out = clampMin0(owed);
+    if (!dref || out <= 0) continue;
+    debtOutstanding[id] = out;
+    debtsTotal += out;
+  }
+  debtsTotal = r2(debtsTotal);
+
   return {
-    reserve: b.reserve,
+    reserve: reserveBal,
     accessible,
     deep,
     floor,
@@ -416,19 +485,21 @@ export function deriveState(data: AppData, now: Date = new Date()): Derived {
     receivableOutstanding,
     receivablesFullValue,
     receivablesWeighted,
+    debtOutstanding,
+    debtsTotal,
     cashTotal,
     assetsTotal,
-    // Receivables raise net worth (at a haircut) but never liquidity.
-    netWorth: r2(cashTotal + assetsTotal + receivablesWeighted),
-    netWorthIfAllRepaid: r2(cashTotal + assetsTotal + receivablesFullValue),
-    liquidWorth: r2(b.reserve + b.regular + b.surplus + provisionsTotal),
+    // Receivables raise net worth (at a haircut); debts lower it.
+    netWorth: r2(cashTotal + assetsTotal + receivablesWeighted - debtsTotal),
+    netWorthIfAllRepaid: r2(cashTotal + assetsTotal + receivablesFullValue - debtsTotal),
+    liquidWorth: r2(reserveBal + b.regular + b.surplus + provisionsTotal),
     givenTotal: b.given,
     // Liquidity feelings deliberately exclude receivables.
     availableToday: r2(regularRemaining + b.surplus),
     accessibleIfNeeded: accessible,
     protectedTotal: r2(deep + provisionsTotal + tiedTotal + assetsTotal),
     runwayMonths:
-      s.livingExpensesMonthly > 0 ? b.reserve / s.livingExpensesMonthly : 0,
+      s.livingExpensesMonthly > 0 ? reserveBal / s.livingExpensesMonthly : 0,
     inRecovery: b.recovery,
     avgMonthlyIncome,
     weekStart,

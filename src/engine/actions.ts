@@ -10,6 +10,7 @@ import type {
   Asset,
   AssetCategory,
   Confidence,
+  Debt,
   Goal,
   GoalKind,
   LendLayer,
@@ -84,7 +85,8 @@ export function logSpend(data: AppData, amount: number, at: Date = new Date()): 
 export function withdrawAccessible(
   data: AppData,
   amount: number,
-  reason: string,
+  category: string,
+  note: string = "",
   at: Date = new Date()
 ): string | null {
   const d = deriveState(data, at);
@@ -97,7 +99,44 @@ export function withdrawAccessible(
     date: at.toISOString(),
     amount: r2(amount),
     layer: "accessible",
-    reason,
+    category: category.trim(),
+    reason: note.trim(),
+  });
+  rememberCategory(data, category);
+  return null;
+}
+
+/** Save a "what's it for" label for reuse, most-recent first. */
+function rememberCategory(data: AppData, label: string): void {
+  const l = label.trim();
+  if (!l) return;
+  data.withdrawalCategories = [l, ...data.withdrawalCategories.filter((c) => c !== l)].slice(0, 12);
+}
+
+/**
+ * "Take this week's allowance" — draw the weekly allowance from the accessible
+ * reserve to live on, tagged with the week it covers so draws are trackable.
+ * Each draw reduces "Accessible if needed"; two draws leave it two weeks
+ * lighter, until income replenishes it. Draws the full allowance, or whatever
+ * accessible remains if it is less.
+ */
+export function takeWeeklyAllowance(
+  data: AppData,
+  weekOf: string,
+  at: Date = new Date()
+): string | null {
+  const d = deriveState(data, at);
+  const amount = r2(Math.min(data.settings.regularWeekly, d.accessible));
+  if (amount <= 0) return "The accessible reserve is empty.";
+  data.events.push({
+    id: uid(),
+    type: "withdrawal",
+    date: at.toISOString(),
+    amount,
+    layer: "accessible",
+    reason: "Weekly allowance",
+    allowance: true,
+    weekOf,
   });
   return null;
 }
@@ -585,5 +624,71 @@ export function writeOffReceivable(
     reason: reason.trim(),
   });
   rec.status = "written_off";
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Debts — money I owe. A liability against net worth.                 */
+/* ------------------------------------------------------------------ */
+
+export function addDebt(
+  data: AppData,
+  input: { name: string; amount: number; dueDate?: string | null; note?: string },
+  at: Date = new Date()
+): Debt {
+  const debt: Debt = {
+    id: uid(),
+    name: input.name.trim(),
+    amount: r2(input.amount),
+    dueDate: input.dueDate ?? null,
+    note: input.note?.trim() ?? "",
+    status: "active",
+    createdAt: at.toISOString(),
+  };
+  data.debts.push(debt);
+  data.events.push({
+    id: uid(),
+    type: "debt_added",
+    date: at.toISOString(),
+    debtId: debt.id,
+    name: debt.name,
+    amount: debt.amount,
+  });
+  return debt;
+}
+
+export function updateDebt(data: AppData, debt: Debt): void {
+  const idx = data.debts.findIndex((x) => x.id === debt.id);
+  if (idx !== -1) data.debts[idx] = { ...debt, amount: r2(debt.amount) };
+}
+
+/** Pay down a debt (full or partial) from a cash layer. */
+export function payDebt(
+  data: AppData,
+  debtId: string,
+  amount: number,
+  layer: "accessible" | "surplus" = "accessible",
+  at: Date = new Date()
+): string | null {
+  const debt = data.debts.find((x) => x.id === debtId);
+  if (!debt || debt.status !== "active") return "Debt not found.";
+  const d = deriveState(data, at);
+  const value = r2(amount);
+  if (value <= 0) return "Enter a payment amount.";
+  const available = layer === "surplus" ? d.surplusHeld : d.accessible;
+  if (value > available + 0.005) {
+    return `Only ${available.toFixed(2)} available in that layer.`;
+  }
+  data.events.push({
+    id: uid(),
+    type: "debt_payment",
+    date: at.toISOString(),
+    debtId: debt.id,
+    name: debt.name,
+    amount: value,
+    layer,
+  });
+  const outstanding = d.debtOutstanding[debt.id] ?? debt.amount;
+  if (value >= outstanding - 0.005) debt.status = "paid";
   return null;
 }

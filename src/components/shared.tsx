@@ -262,3 +262,71 @@ export function AllocationRing({
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Allocation bar — one horizontal stack; hover a segment to read it    */
+/* ------------------------------------------------------------------ */
+
+export function AllocationBar({
+  slices,
+  symbol,
+}: {
+  slices: RingSlice[];
+  symbol: string;
+}) {
+  const shown = slices.filter((s) => s.value > 0);
+  const total = shown.reduce((s, x) => s + x.value, 0);
+  const [hover, setHover] = useState<RingSlice | null>(null);
+  const pct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
+
+  if (total <= 0) {
+    return <div className="status-line">Nothing allocated yet.</div>;
+  }
+
+  return (
+    <div>
+      <div className="alloc-bar">
+        {shown.map((s) => (
+          <div
+            key={s.label}
+            className="alloc-seg"
+            style={{ width: `${pct(s.value)}%`, background: s.color }}
+            title={`${s.label} — ${fmt(s.value, symbol)} (${Math.round(pct(s.value))}%)`}
+            onMouseEnter={() => setHover(s)}
+            onMouseLeave={() => setHover(null)}
+          />
+        ))}
+      </div>
+
+      {/* the hovered segment, read out plainly below the bar */}
+      <div className="status-line mt16" style={{ minHeight: 20 }}>
+        {hover ? (
+          <>
+            <span
+              className="alloc-swatch"
+              style={{ background: hover.color, display: "inline-block", marginRight: 8, verticalAlign: "middle" }}
+            />
+            {hover.label} — <span className="num">{fmt(hover.value, symbol)}</span>{" "}
+            <span className="faint">({Math.round(pct(hover.value))}%)</span>
+          </>
+        ) : (
+          <span className="faint">Hover a segment to read it.</span>
+        )}
+      </div>
+
+      <div className="alloc-legend">
+        {shown.map((s) => (
+          <span
+            key={s.label}
+            className="alloc-legend-item"
+            onMouseEnter={() => setHover(s)}
+            onMouseLeave={() => setHover(null)}
+          >
+            <span className="alloc-swatch" style={{ background: s.color }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
