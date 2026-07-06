@@ -25,6 +25,8 @@ export const localStorageBackend: Storage = {
       parsed.settings = { ...DEFAULT_SETTINGS, ...parsed.settings };
       parsed.receivables ??= [];
       parsed.debts ??= [];
+      parsed.accounts ??= [];
+      parsed.accountMap ??= {};
       parsed.pendingWithdrawals ??= [];
       if (!parsed.withdrawalCategories?.length) parsed.withdrawalCategories = [...DEFAULT_CATEGORIES];
       return parsed;
@@ -53,6 +55,8 @@ export function validateImport(raw: string): AppData {
   parsed.settings = { ...DEFAULT_SETTINGS, ...parsed.settings };
   parsed.receivables ??= [];
   parsed.debts ??= [];
+  parsed.accounts ??= [];
+  parsed.accountMap ??= {};
   parsed.pendingWithdrawals ??= [];
   parsed.incomeSources ??= [];
   if (!parsed.withdrawalCategories?.length) parsed.withdrawalCategories = [...DEFAULT_CATEGORIES];

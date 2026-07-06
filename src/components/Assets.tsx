@@ -11,6 +11,7 @@ import { assetValueAt } from "../engine/replay";
 import { fmt, fmtDate, parseISO, DAY_MS } from "../lib/util";
 import { Modal } from "./shared";
 import { Receivables } from "./Receivables";
+import { AccountsPanel } from "./Accounts";
 
 const CATEGORIES: { value: AssetCategory; label: string }[] = [
   { value: "vehicle", label: "Vehicle (auto-depreciates)" },
@@ -34,31 +35,10 @@ export function Assets() {
     <div className="screen">
       <h1 className="page-title">Assets</h1>
       <p className="page-sub">
-        Holdings. <span className="green">Verified</span> figures are routed by
-        Regular; <span className="amber">estimated</span> figures are entered by
-        you and age over time.
+        Where your net worth is held, and the outside things you own.
       </p>
 
-      <div className="card">
-        <div className="row">
-          <span className="label">Verified — routed by Regular</span>
-          <span className="chip ok">verified</span>
-        </div>
-        <div className="stack mt16" style={{ gap: 10 }}>
-          <div className="row">
-            <span className="dim">Cash layers</span>
-            <span className="num">{fmt(d.reserve + d.regularWallet + d.surplusHeld, sym)}</span>
-          </div>
-          <div className="row">
-            <span className="dim">Objectives</span>
-            <span className="num">{fmt(d.tiedTotal, sym)}</span>
-          </div>
-          <div className="row">
-            <span className="dim">Provisions</span>
-            <span className="num">{fmt(d.provisionsTotal, sym)}</span>
-          </div>
-        </div>
-      </div>
+      <AccountsPanel />
 
       <div className="row mt24 mb16">
         <h2>Outside assets</h2>
@@ -98,6 +78,21 @@ export function Assets() {
             {stale && (
               <div className="notice mt16">
                 Last valued {fmtDate(a.lastUpdated)}. Confirm the figure.
+              </div>
+            )}
+            {data.accounts.length > 0 && (
+              <div className="field mt16" style={{ marginBottom: 0, maxWidth: 280 }}>
+                <span className="label">Held at</span>
+                <select
+                  className="select"
+                  value={a.accountId ?? ""}
+                  onChange={(e) => apply((draft) => actions.setAssetAccount(draft, a.id, e.target.value))}
+                >
+                  <option value="">Unassigned</option>
+                  {data.accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                  ))}
+                </select>
               </div>
             )}
             <div className="mt16" style={{ display: "flex", gap: 8 }}>

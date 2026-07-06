@@ -111,7 +111,39 @@ export interface Asset {
   value: number;
   lastUpdated: string; // ISO datetime
   createdAt: string;
+  /** Which account/institution holds this asset (see Account). Optional. */
+  accountId?: string;
 }
+
+/* ------------------------------------------------------------------ */
+/* Accounts — WHERE money lives (banks, brokerages, wallets, etc.).    */
+/*                                                                     */
+/* Accounts are labels on where the derived money physically sits;     */
+/* they are NOT a second set of balances. Managed-cash pools are       */
+/* *assigned* to accounts (via accountMap) and assets carry accountId, */
+/* so the "Where it is" breakdown reconciles to net worth exactly.     */
+/* ------------------------------------------------------------------ */
+
+export type AccountType =
+  | "checking"
+  | "savings"
+  | "brokerage"
+  | "crypto"
+  | "cash"
+  | "property"
+  | "other";
+
+export interface Account {
+  id: string;
+  name: string;
+  type: AccountType;
+  note: string;
+  createdAt: string;
+}
+
+/** Stable keys for the managed-cash pools that can be assigned to accounts. */
+export const POOL_KEYS = ["reserve", "allowance", "goals", "provisions"] as const;
+export type PoolKey = (typeof POOL_KEYS)[number];
 
 /* ------------------------------------------------------------------ */
 /* Receivables — money owed to me. A claim, NEVER cash.                */
@@ -362,6 +394,9 @@ export interface AppData {
   settings: Settings;
   goals: Goal[];
   assets: Asset[];
+  accounts: Account[];
+  /** Maps a managed-cash pool key → account id (where that pool is held). */
+  accountMap: Record<string, string>;
   receivables: Receivable[];
   debts: Debt[];
   events: LedgerEvent[];
@@ -400,6 +435,8 @@ export function emptyData(settings?: Settings): AppData {
     settings: settings ?? { ...DEFAULT_SETTINGS },
     goals: [],
     assets: [],
+    accounts: [],
+    accountMap: {},
     receivables: [],
     debts: [],
     events: [],

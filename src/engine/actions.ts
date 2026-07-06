@@ -6,6 +6,8 @@
  */
 
 import type {
+  Account,
+  AccountType,
   AppData,
   Asset,
   AssetCategory,
@@ -625,6 +627,54 @@ export function writeOffReceivable(
   });
   rec.status = "written_off";
   return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Accounts — where money lives (labels, not balances)                 */
+/* ------------------------------------------------------------------ */
+
+export function addAccount(
+  data: AppData,
+  input: { name: string; type: AccountType; note?: string },
+  at: Date = new Date()
+): Account {
+  const account: Account = {
+    id: uid(),
+    name: input.name.trim(),
+    type: input.type,
+    note: input.note?.trim() ?? "",
+    createdAt: at.toISOString(),
+  };
+  data.accounts.push(account);
+  return account;
+}
+
+export function updateAccount(data: AppData, account: Account): void {
+  const idx = data.accounts.findIndex((a) => a.id === account.id);
+  if (idx !== -1) data.accounts[idx] = { ...account, name: account.name.trim() };
+}
+
+/** Remove an account and clear any pool/asset that pointed at it. */
+export function removeAccount(data: AppData, accountId: string): void {
+  data.accounts = data.accounts.filter((a) => a.id !== accountId);
+  for (const key of Object.keys(data.accountMap)) {
+    if (data.accountMap[key] === accountId) delete data.accountMap[key];
+  }
+  for (const asset of data.assets) {
+    if (asset.accountId === accountId) asset.accountId = undefined;
+  }
+}
+
+/** Assign a managed-cash pool (reserve/allowance/goals/provisions) to an account. */
+export function setPoolAccount(data: AppData, poolKey: string, accountId: string): void {
+  if (accountId) data.accountMap[poolKey] = accountId;
+  else delete data.accountMap[poolKey];
+}
+
+/** Assign an outside asset to an account. */
+export function setAssetAccount(data: AppData, assetId: string, accountId: string): void {
+  const asset = data.assets.find((a) => a.id === assetId);
+  if (asset) asset.accountId = accountId || undefined;
 }
 
 /* ------------------------------------------------------------------ */

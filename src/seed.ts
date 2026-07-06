@@ -7,6 +7,7 @@
 import type { AppData } from "./types";
 import { emptyData } from "./types";
 import {
+  addAccount,
   addAsset,
   addDebt,
   addGoal,
@@ -17,6 +18,8 @@ import {
   logSpend,
   payDebt,
   payProvision,
+  setAssetAccount,
+  setPoolAccount,
   takeWeeklyAllowance,
   withdrawAccessible,
 } from "./engine/actions";
@@ -92,9 +95,22 @@ export function buildSeedData(now: Date = new Date()): AppData {
   );
 
   /* Outside assets. */
-  addAsset(data, { name: "2018 Corolla", category: "vehicle", value: 11500 }, at(1));
-  addAsset(data, { name: "High-yield savings", category: "savings", value: 4200 }, at(1));
-  addAsset(data, { name: "Bitcoin", category: "crypto", value: 2800 }, at(1));
+  const corolla = addAsset(data, { name: "2018 Corolla", category: "vehicle", value: 11500 }, at(1));
+  const hysa = addAsset(data, { name: "High-yield savings", category: "savings", value: 4200 }, at(1));
+  const btc = addAsset(data, { name: "Bitcoin", category: "crypto", value: 2800 }, at(1));
+
+  /* Accounts — where the money lives — with the pools and assets assigned. */
+  const ally = addAccount(data, { name: "Ally Savings", type: "savings", note: "…4021" }, at(1));
+  const chase = addAccount(data, { name: "Chase Checking", type: "checking", note: "…8830" }, at(1));
+  const wealthfront = addAccount(data, { name: "Wealthfront", type: "brokerage" }, at(1));
+  const coinbase = addAccount(data, { name: "Coinbase", type: "crypto" }, at(1));
+  setPoolAccount(data, "reserve", ally.id);
+  setPoolAccount(data, "allowance", chase.id);
+  setPoolAccount(data, "goals", wealthfront.id);
+  setPoolAccount(data, "provisions", chase.id);
+  setAssetAccount(data, hysa.id, ally.id);
+  setAssetAccount(data, btc.id, coinbase.id);
+  void corolla; // the car stays unassigned (property, not held at an institution)
 
   /* Income: multiple sources, irregular amounts — the app's whole premise. */
   const incomes: Array<[number, number, string]> = [
