@@ -10,6 +10,7 @@ import type { IncomeEvent } from "../types";
 import { computeSplit } from "../engine/split";
 import { fmtExact, toISODate, parseISO } from "../lib/util";
 import { SplitReceipt } from "./shared";
+import { AddMoneyModal } from "./CashActions";
 
 export function MoneyIn() {
   const { data, derived, apply, actions } = useStore();
@@ -19,6 +20,7 @@ export function MoneyIn() {
   const [source, setSource] = useState(data.incomeSources[0] ?? "");
   const [date, setDate] = useState(toISODate(new Date()));
   const [receipt, setReceipt] = useState<IncomeEvent | null>(null);
+  const [addMoney, setAddMoney] = useState(false);
 
   const [spend, setSpend] = useState("");
   const [spendFlash, setSpendFlash] = useState<string | null>(null);
@@ -60,8 +62,15 @@ export function MoneyIn() {
 
   return (
     <div className="screen">
-      <h1 className="page-title">Money in</h1>
-      <p className="page-sub">Record it. The allocation follows.</p>
+      <div className="row" style={{ alignItems: "baseline" }}>
+        <div>
+          <h1 className="page-title">Money in</h1>
+          <p className="page-sub">Record it. The allocation follows.</p>
+        </div>
+        <button className="btn btn-quiet" onClick={() => setAddMoney(true)}>
+          Add existing money
+        </button>
+      </div>
 
       <div className="grid2">
         <div className="card">
@@ -173,6 +182,8 @@ export function MoneyIn() {
           Optional. The weekly figure resets each week.
         </div>
       </div>
+
+      {addMoney && <AddMoneyModal onClose={() => setAddMoney(false)} />}
     </div>
   );
 }

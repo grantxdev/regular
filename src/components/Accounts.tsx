@@ -11,6 +11,7 @@ import type { Account, AccountType } from "../types";
 import { managedPools, whereItIs } from "../engine/accounts";
 import { fmt } from "../lib/util";
 import { Modal } from "./shared";
+import { AddMoneyModal } from "./CashActions";
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "checking", label: "Checking" },
@@ -30,6 +31,7 @@ export function AccountsPanel() {
   const now = new Date();
   const [editing, setEditing] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
+  const [addMoney, setAddMoney] = useState(false);
 
   const groups = whereItIs(data, d, now);
   const pools = managedPools(d).filter((p) => p.value > 0.005);
@@ -43,9 +45,14 @@ export function AccountsPanel() {
             <span className="label">Where it is</span>
             <div className="status-line faint">Your net worth, by where it's held.</div>
           </div>
-          <button className="btn" onClick={() => setAdding(true)}>
-            Add account
-          </button>
+          <span style={{ display: "flex", gap: 8 }}>
+            <button className="btn" onClick={() => setAddMoney(true)}>
+              Add money
+            </button>
+            <button className="btn" onClick={() => setAdding(true)}>
+              Add account
+            </button>
+          </span>
         </div>
 
         {groups.length === 0 && data.accounts.length === 0 && (
@@ -155,6 +162,7 @@ export function AccountsPanel() {
 
       {adding && <AccountForm onClose={() => setAdding(false)} />}
       {editing && <AccountForm existing={editing} onClose={() => setEditing(null)} />}
+      {addMoney && <AddMoneyModal onClose={() => setAddMoney(false)} />}
     </>
   );
 }

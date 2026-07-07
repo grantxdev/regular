@@ -1,10 +1,12 @@
 /**
- * Cash actions launched from the Console:
+ * Cash actions launched from the Console / Money in:
  *   - TakeAllowanceModal: pick a week and draw that week's allowance from the
  *     accessible reserve. Recent weeks show whether they've been taken, so
  *     weekly draws are trackable at a glance.
  *   - AccessibleWithdrawModal: withdraw an arbitrary amount from the accessible
  *     reserve with a "what's it for" label, remembered for reuse.
+ *   - AddMoneyModal: enter money you already had (opening balances) straight
+ *     into a bucket or goal — no split, since it isn't new income.
  */
 
 import { useMemo, useState } from "react";
@@ -187,6 +189,114 @@ export function AccessibleWithdrawModal({ onClose }: { onClose: () => void }) {
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-primary" disabled={!valid} onClick={submit}>
           Withdraw
+        </button>
+        <button className="btn btn-quiet" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Add existing money — opening balances, straight into a bucket/goal   */
+/* ------------------------------------------------------------------ */
+
+export function AddMoneyModal({ onClose }: { onClose: () => void }) {
+  const { data, derived: d, apply, actions } = useStore();
+  const sym = data.settings.currencySymbol;
+
+  // Destinations: the managed buckets, then each active goal.
+  const goals = data.goals.filter((g) => g.status === "active");
+  const [dest, setDest] = useState("reserve");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+
+  const v = parseFloat(amount);
+  const valid = !isNaN(v) && v > 0;
+
+  const currentBalance = (() => {
+    if (dest === "reserve") return d.reserve;
+    if (dest === "regular") return d.regularWallet;
+    if (dest === "surplus") return d.surplusHeld;
+    const id = dest.startsWith("goal:") ? dest.slice(5) : "";
+    return d.goalBalances[id] ?? 0;
+  })();
+
+  const submit = () => {
+    if (!valid) return;
+    const reason = note.trim() || "Opening balance";
+    apply((draft) => {
+      if (dest.startsWith("goal:")) {
+        actions.adjust(draft, "goal", v, reason, dest.slice(5));
+      } else {
+        actions.adjust(draft, dest as "reserve" | "regular" | "surplus", v, reason);
+      }
+    });
+    onClose();
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="mb8">Add existing money</h2>
+      <div className="status-line mb16">
+        Money you already had before Regular. It goes straight in — no split,
+        no giving — since it isn't new income.
+      </div>
+
+      <div className="field">
+        <span className="label">Where does it go?</span>
+        <select className="select" value={dest} onChange={(e) => setDest(e.target.value)}>
+          <option value="reserve">Reserve (savings buffer)</option>
+          <option value="regular">Allowance (spending wallet)</option>
+          <option value="surplus">Surplus (unassigned)</option>
+          {goals.length > 0 && (
+            <optgroup label="Goals">
+              {goals.map((g) => (
+                <option key={g.id} value={`goal:${g.id}`}>
+                  {g.name}
+                  {g.kind === "provision" ? " (provision)" : ""}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        <span className="field-hint">Currently holds {fmt(currentBalance, sym)}.</span>
+      </div>
+
+      <div className="field">
+        <span className="label">Amount</span>
+        <input
+          className="input"
+          type="number"
+          min="0"
+          step="0.01"
+          value={amount}
+          autoFocus
+          onChange={(e) => setAmount(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+        />
+      </div>
+
+      <div className="field">
+        <span className="label">Note (optional)</span>
+        <input
+          className="input"
+          placeholder="Opening balance"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+        />
+      </div>
+
+      <div className="notice mb16">
+        Shows up in Where it is under whichever account holds this pool — set
+        that on the Assets page.
+      </div>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn btn-primary" disabled={!valid} onClick={submit}>
+          Add
         </button>
         <button className="btn btn-quiet" onClick={onClose}>
           Cancel
