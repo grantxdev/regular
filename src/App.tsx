@@ -14,6 +14,17 @@ import { Reports } from "./components/Reports";
 import { Ledger } from "./components/Ledger";
 import { Rules } from "./components/Rules";
 
+/** Eye / eye-off icon for the privacy toggle. */
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+      {off && <line x1="3" y1="3" x2="21" y2="21" />}
+    </svg>
+  );
+}
+
 const NAV: { id: Screen; label: string; hint: string }[] = [
   { id: "console", label: "Console", hint: "Overview" },
   { id: "money-in", label: "Money in", hint: "Record income" },
@@ -29,7 +40,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("console");
   const [offline, setOffline] = useState(false);
   const [showTour, setShowTour] = useState(false);
-  const { derived, isSeeded, cloudStatus } = useStore();
+  const { derived, isSeeded, cloudStatus, privacyOn, togglePrivacy } = useStore();
 
   const gated = cloudEnabled && cloudStatus === "signedOut" && !offline;
 
@@ -62,8 +73,20 @@ export default function App() {
       {showTour && <Onboarding onDone={() => setShowTour(false)} />}
       <aside className="rail">
         <div className="rail-brand">
-          <div className="wordmark">REGULAR</div>
-          <div className="tagline">Your affairs, in order.</div>
+          <div className="row" style={{ alignItems: "flex-start" }}>
+            <div>
+              <div className="wordmark">REGULAR</div>
+              <div className="tagline">Your affairs, in order.</div>
+            </div>
+            <button
+              className={`eye-toggle ${privacyOn ? "on" : ""}`}
+              title={privacyOn ? "Show figures" : "Hide figures"}
+              aria-label={privacyOn ? "Show figures" : "Hide figures"}
+              onClick={togglePrivacy}
+            >
+              <EyeIcon off={privacyOn} />
+            </button>
+          </div>
         </div>
         <nav className="rail-nav">
           {NAV.map((n) => (

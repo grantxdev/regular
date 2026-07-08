@@ -16,6 +16,7 @@ export function Rules() {
     data, derived: d, updateSettings, exportData, importData,
     wipeAll, loadExample, isSeeded, apply, actions,
     cloudStatus, accountEmail, signOut,
+    privacyOn, togglePrivacy,
   } = useStore();
   const s = data.settings;
   const sym = s.currencySymbol;
@@ -319,6 +320,21 @@ export function Rules() {
         >
           Review the introduction
         </button>
+      </div>
+
+      {/* privacy */}
+      <div className="card mt16">
+        <div className="row">
+          <span className="label">Privacy</span>
+          <button className="btn" onClick={togglePrivacy}>
+            {privacyOn ? "Show figures" : "Hide figures now"}
+          </button>
+        </div>
+        <div className="status-line mt8">
+          The eye beside the logo hides every figure behind dots ({sym}••••) with
+          one tap — for when someone's beside you. A local setting; your real
+          data is untouched.
+        </div>
       </div>
 
       {adjusting && <AdjustDialog onClose={() => setAdjusting(false)} />}

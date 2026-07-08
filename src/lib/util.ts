@@ -25,14 +25,32 @@ const centFmt = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+/* ---------------------- privacy (shoulder-surfing) ---------------------- */
+/**
+ * A global toggle that masks every money figure with dots ("$••••"), for when
+ * someone's beside you. Because all money rendering funnels through fmt/
+ * fmtExact, gating here covers the whole app. State lives in this module; the
+ * store keeps React re-rendering in sync.
+ */
+let _hidden = false;
+
+export function setPrivacy(hidden: boolean): void {
+  _hidden = hidden;
+}
+export function isPrivacyOn(): boolean {
+  return _hidden;
+}
+
 /** "$1,400" — whole dollars for display; used for the big numbers. */
 export function fmt(n: number, symbol = "$"): string {
+  if (_hidden) return `${symbol}••••`;
   const sign = n < 0 ? "−" : "";
   return `${sign}${symbol}${intFmt.format(Math.abs(Math.round(n)))}`;
 }
 
 /** "$1,400.00" — exact cents; used in the ledger and receipts. */
 export function fmtExact(n: number, symbol = "$"): string {
+  if (_hidden) return `${symbol}••••••`;
   const sign = n < 0 ? "−" : "";
   return `${sign}${symbol}${centFmt.format(Math.abs(n))}`;
 }

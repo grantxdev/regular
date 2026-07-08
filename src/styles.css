@@ -504,6 +504,22 @@ button.linklike {
 }
 button.linklike:hover { color: var(--text); }
 
+/* privacy eye toggle — subtle until hovered; green while hiding */
+.eye-toggle {
+  appearance: none;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 5px;
+  margin: -2px -4px 0 0;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: inline-flex;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.eye-toggle:hover { color: var(--text); border-color: var(--line-strong); }
+.eye-toggle.on { color: var(--accent); }
+
 /* subtle fade-in for screens; nothing bounces */
 .screen { animation: fade 180ms ease; }
 @keyframes fade { from { opacity: 0.4; } to { opacity: 1; } }

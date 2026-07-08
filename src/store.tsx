@@ -20,6 +20,7 @@ import type { Session } from "@supabase/supabase-js";
 import type { AppData, Settings } from "./types";
 import { emptyData } from "./types";
 import { exportJSON, localStorageBackend, validateImport } from "./storage";
+import { setPrivacy } from "./lib/util";
 import {
   cloudEnabled,
   fetchRemote,
@@ -49,11 +50,17 @@ interface StoreValue {
   exportData: () => void;
   importData: (raw: string) => string | null;
   actions: typeof actions;
+  /* privacy — a local view preference, never synced or in the document */
+  privacyOn: boolean;
+  togglePrivacy: () => void;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
 
 const SEEDED_KEY = "regular-is-seed-v1";
+
+/* privacy preference, held per-device in localStorage */
+const PRIV_ON_KEY = "regular-privacy-on-v1";
 
 function initialData(): AppData {
   const existing = localStorageBackend.load();
@@ -74,6 +81,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>(
     cloudEnabled ? "signedOut" : "disabled"
   );
+
+  /* privacy — mirror to the util module so fmt/fmtExact mask on render */
+  const [privacyOn, setPrivacyOn] = useState(
+    () => localStorage.getItem(PRIV_ON_KEY) === "1"
+  );
+  // Set the module state before first paint so numbers render masked.
+  setPrivacy(privacyOn);
+
+  const togglePrivacy = useCallback(() => {
+    setPrivacyOn((on) => {
+      const next = !on;
+      localStorage.setItem(PRIV_ON_KEY, next ? "1" : "0");
+      setPrivacy(next);
+      return next;
+    });
+  }, []);
 
   const sessionRef = useRef<Session | null>(null);
   sessionRef.current = session;
@@ -251,6 +274,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     exportData,
     importData,
     actions,
+    privacyOn,
+    togglePrivacy,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
